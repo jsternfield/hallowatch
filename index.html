@@ -317,7 +317,7 @@ async function loadCards() {
     const values = lines[i].split(',');
     if (values.length >= 7) { // Assuming at least 7 columns: A,B,C,D,E,F,G
       const card = {
-        name: values[2].trim().replace(/^"|"$/g, '').replace(/ \(\d{4}\)$/, ''), // Column C: title, remove quotes and year
+        name: values[2].trim().replace(/^"|"$/g, '').replace(/ \(\d{4}(?:, )?(.*?)\)$/, (match, p1) => p1 ? ` (${p1})` : ''), // Column C: title, remove quotes and year
         ageRating: values[4].trim(), // Column E: Age Rating
         year: values[5].trim(), // Column F: Year
         genres: values[6].trim().replace(/^"|"$/g, ''), // Column G: Genre(s)
