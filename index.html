@@ -65,21 +65,42 @@ body {
   justify-content: center;
 }
 
-#pulled-card .card {
-  width: 240px;
-  margin: 0 auto;
-}
-
 .card {
   border: 1px solid #404040;
   border-radius: 8px;
   padding: 10px;
   margin: 10px;
-  width: 160px;
+  /* Desktop: fixed width / Mobile: dynamic width */
+  width: 240px; 
+  max-width: 240px; 
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   background-color: #2a2a2a;
   color: #e0e0e0;
-  transition: transform 0.3s;
+  transition: transform 0.2s;
+  box-sizing: border-box; /* Ensures padding doesn't break the width */
+}
+
+#pulled-card {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+@media (max-width: 240px) {
+  .card {
+    /* Forces 2 columns by setting width to just under 50% */
+    width: 45%; 
+    margin: 5px;
+    padding: 5px;
+    font-size: 0.8em;
+  }
+  
+  #pulled-card .card {
+    /* Keeps the 'Pulled' result large and centered */
+    width: 50%;
+    max-width: 240px;
+    margin: 0 auto;
+  }
 }
 
 .card:hover {
@@ -369,7 +390,7 @@ loadCards().then(cards => {
         const pulledContainer = document.getElementById('pulled-card');
         pulledContainer.innerHTML = `
           <div class="card ${getClass(randomCard.ageRating)}">
-            <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.png'">
+            <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.webp'">
             <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
             <p>Age Rating: ${randomCard.ageRating}</p>
             <p>Year: ${randomCard.year}</p>
