@@ -66,7 +66,7 @@ body {
 }
 
 #pulled-card .card {
-  width: 200px;
+  width: 240px;
   margin: 0 auto;
 }
 
@@ -75,7 +75,7 @@ body {
   border-radius: 8px;
   padding: 10px;
   margin: 10px;
-  width: 150px;
+  width: 160px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   background-color: #2a2a2a;
   color: #e0e0e0;
@@ -163,7 +163,7 @@ body {
 const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
 
 // Debug toggle - set to false to hide the debug window
-const debug = true;
+const debug = false;
 
 document.querySelector('#app').innerHTML = `
   <div>
@@ -194,61 +194,47 @@ function updateCardLinks(card) {
   const cardDiv = document.querySelector(`.card img[alt="${card.name}"]`)?.closest('.card');
   if (!cardDiv) return;
 
-  // wrap image
+  // Update or wrap image link
   const img = cardDiv.querySelector('img');
-  if (img && !img.closest('a')) {
-    const a = document.createElement('a');
-    a.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
-    a.target = '_blank';
-    a.className = 'card-link';
-    img.parentNode.insertBefore(a, img);
-    a.appendChild(img);
+  if (img) {
+    let imgAnchor = img.closest('a');
+    if (!imgAnchor) {
+      imgAnchor = document.createElement('a');
+      img.parentNode.insertBefore(imgAnchor, img);
+      imgAnchor.appendChild(img);
+    }
+    imgAnchor.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
+    imgAnchor.target = '_blank';
+    imgAnchor.className = 'card-link';
   }
 
-  // wrap title
-  const h3 = cardDiv.querySelector('h3');
-  if (h3 && !h3.querySelector('a')) {
-    const a2 = document.createElement('a');
-    a2.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
-    a2.target = '_blank';
-    a2.className = 'card-link';
-    a2.textContent = h3.textContent;
-    h3.textContent = '';
-    h3.appendChild(a2);
+  // Update Title link from generic search to specific TMDB ID
+  const titleLink = cardDiv.querySelector('h3 a');
+  if (titleLink) {
+    titleLink.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
   }
 }
 
 // Function to fetch image for a card
-async function fetchImage(card, triedYear = false) {
+async function fetchImage(card, triedWithYear = true) {
   try {
     let searchQuery = card.name;
     let isTV = false;
 
-    // if we are retrying with year, adjust query or parameters later
-    const yearParam = (triedYear && card.year) ? card.year : null;
-    
-    // Check if title contains " (TV)"
     if (searchQuery.includes(' (TV)')) {
       searchQuery = searchQuery.replace(' (TV)', '').trim();
       isTV = true;
     }
-    
-    // Check if Age Rating contains "TV"
-    if (card.ageRating.includes('TV')) {
+    if (card.ageRating.includes('TV') || card.genres.toLowerCase().includes('tv') || card.genres.toLowerCase().includes('series')) {
       isTV = true;
     }
-    
-    // Check if Genre contains "tv" or "series"
-    if (card.genres.toLowerCase().includes('tv') || card.genres.toLowerCase().includes('series')) {
-      isTV = true;
-    }
-    
+
     const query = encodeURIComponent(searchQuery);
+    // Use year only if triedWithYear is true and a year exists
+    const yearParam = (triedWithYear && card.year) ? card.year : null;
     let url, res, data, poster = null;
-    
+
     if (isTV) {
-      // Search TV only
-      // include first_air_date_year if retrying with year
       url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}` +
             (yearParam ? `&first_air_date_year=${yearParam}` : '');
       res = await fetch(url);
@@ -259,17 +245,17 @@ async function fetchImage(card, triedYear = false) {
         card.isTV = true;
       }
     } else {
-      // Try movie search first
       url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}` +
-            (yearParam ? `&year=${yearParam}` : '');
+            (yearParam ? `&primary_release_year=${yearParam}` : '');
       res = await fetch(url);
       data = await res.json();
+      
       if (data.results && data.results.length > 0) {
         poster = data.results[0].poster_path;
         card.id = data.results[0].id;
         card.isTV = false;
       } else {
-        // Try TV search (also include yearParam)
+        // Fallback to TV search
         url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}` +
               (yearParam ? `&first_air_date_year=${yearParam}` : '');
         res = await fetch(url);
@@ -281,24 +267,21 @@ async function fetchImage(card, triedYear = false) {
         }
       }
     }
-    
-    // retry once with year parameter if we didn't get a result and haven't tried yet
-    if (!poster && card.year && !triedYear) {
-      console.log('retrying TMDB lookup with year', card.year, 'for', card.name);
-      return fetchImage(card, true);
+
+    // FALLBACK: If no poster found with year, retry once without the year constraint
+    if (!poster && triedWithYear && card.year) {
+      console.log(`No match for ${card.name} (${card.year}). Retrying without year...`);
+      return fetchImage(card, false);
     }
-    
+
     if (poster) {
       card.image = `https://image.tmdb.org/t/p/w200/${poster}`;
-      updateCardImage(card); // Update the image in the DOM
-      // update links now that we know the TMDB ID
+      updateCardImage(card);
       updateCardLinks(card);
-    } else {
-      console.error('No poster found for:', card.name);
-      if (debug) {
-        const linkHtml = card.id ? `<a href="https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}" target="_blank">${card.name}</a>` : card.name;
-        document.getElementById('debug-window').innerHTML += `<p>${linkHtml}</p>`;
-      }
+    } else if (debug && !triedWithYear) {
+      // Only log to debug window if even the title-only search failed
+      const linkHtml = card.name;
+      document.getElementById('debug-window').innerHTML += `<p>Failed (All attempts): ${linkHtml}</p>`;
     }
   } catch (e) {
     console.error('Error fetching image for', card.name, e);
@@ -313,19 +296,24 @@ async function loadCards() {
   const lines = csvText.split('\n');
   const headers = lines[0].split(',');
   const cards = [];
+
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',');
-    if (values.length >= 7) { // Assuming at least 7 columns: A,B,C,D,E,F,G
+    // Regex to split by comma but ignore commas inside double quotes
+    const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    
+    if (values.length >= 7) {
       const card = {
-        name: values[2].trim().replace(/^"|"$/g, '').replace(/ \(\d{4}(?:, )?(.*?)\)$/, (match, p1) => p1 ? ` (${p1})` : ''), // Column C: title, remove quotes and year
-        ageRating: values[4].trim(), // Column E: Age Rating
-        year: values[5].trim(), // Column F: Year
-        genres: values[6].trim().replace(/^"|"$/g, ''), // Column G: Genre(s)
-        image: 'https://via.placeholder.com/150', // Placeholder image
+        // Remove wrapping quotes and trailing years from the title
+        name: values[2].replace(/^"|"$/g, '').replace(/ \(\d{4}\)$/, '').trim(), 
+        ageRating: values[4].replace(/^"|"$/g, '').trim(),
+        year: values[5].replace(/^"|"$/g, '').trim(),
+        // Keep internal commas but remove wrapping quotes
+        genres: values[6].replace(/^"|"$/g, '').trim(), 
+        image: 'https://via.placeholder.com/150',
         id: null,
         isTV: false
       };
-      if (card.name) { // Only add if name exists
+      if (card.name) {
         cards.push(card);
       }
     }
