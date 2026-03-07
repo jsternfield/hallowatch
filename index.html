@@ -59,6 +59,44 @@ body {
   font-family: Arial, sans-serif;
 }
 
+#app { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #1a1a1a; min-height: 100vh; color: #e0e0e0; position: relative; }
+      
+/* Filter Icon & Menu Styles */
+#filter-icon {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 30px;
+  cursor: pointer;
+  z-index: 1001;
+}
+
+#filter-menu {
+  display: none;
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background: #2a2a2a;
+  border: 2px solid #404040;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: left;
+  z-index: 1000;
+  width: 200px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.filter-group { margin-bottom: 15px; }
+.filter-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #fff; }
+.genre-list { max-height: 150px; overflow-y: auto; background: #1a1a1a; padding: 5px; border-radius: 4px; }
+.genre-item { display: flex; align-items: center; font-size: 0.85em; margin: 2px 0; }
+
+#apply-filters {
+  width: 100%;
+  background-color: #4a4a4a !important;
+  margin-top: 10px;
+}
+
 #cards {
   display: flex;
   flex-wrap: wrap;
@@ -130,11 +168,11 @@ body {
   color: #b0b0b0;
 }
 
-.g { background: linear-gradient(135deg, #2a5a2a 0%, #1a4a1a 100%); }
-.pg13 { background: linear-gradient(135deg, #2a4a7a 0%, #1a3a6a 100%); }
-.tvma { background: linear-gradient(135deg, #7a2a2a 0%, #6a1a1a 100%); }
-.r { background: linear-gradient(135deg, #7a2a2a 0%, #6a1a1a 100%); }
-.nr { background: linear-gradient(135deg, #7a5a2a 0%, #6a4a1a 100%); }
+.common { background: linear-gradient(135deg, #ababab 0%, #1a4a1a 100%); }
+.uncommon { background: linear-gradient(135deg, #2a5a2a 0%, #1a4a1a 100%); }
+.rare { background: linear-gradient(135deg, #2a4a7a 0%, #1a3a6a 100%); }
+.epic { background: linear-gradient(135deg, #7a2a2a 0%, #6a1a1a 100%); }
+.unique { background: linear-gradient(135deg, #7a5a2a 0%, #6a4a1a 100%); }
 
 .card a {
   color: #ffffff;
@@ -174,23 +212,48 @@ body {
 #debug-window a:hover {
   text-decoration: underline;
 }
-    </style>
-  </head>
-  <body>
-    <div id="app"></div>
+</style>
+</head>
+
+<body>
+    <div id="app">      
     <div id="debug-window"><h4>Failed TMDB Fetches</h4></div>
-    <script>
-// TMDB API key - get your free key from https://www.themoviedb.org/settings/api
-const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
 
-// Debug toggle - set to false to hide the debug window
-const debug = false;
+    <img src="filter-icon.png" id="filter-icon" alt="Filter">
 
-document.querySelector('#app').innerHTML = `
-  <div>
+    <div id="filter-menu">
+        <div class="filter-group">
+            <label>Decade</label>
+            <select id="filter-decade">
+                <option value="all">All Decades</option>
+                <option value="1920">1920s</option>
+                <option value="1930">1930s</option>
+                <option value="1940">1940s</option>
+                <option value="1950">1950s</option>
+                <option value="1960">1960s</option>
+                <option value="1970">1970s</option>
+                <option value="1980">1980s</option>
+                <option value="1990">1990s</option>
+                <option value="2000">2000s</option>
+                <option value="2010">2010s</option>
+                <option value="2020">2020s</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Genres</label>
+            <div id="genre-container" class="genre-list"></div>
+        </div>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-failed-images" style="margin-right: 8px;"> 
+          Debug: Failed Images
+        </label>
+        <button id="apply-filters">Apply</button>
+        <button id="clear-filters" style="width: 100%; background-color: transparent; border: 1px solid #666; margin-top: 8px; font-size: 0.8em;">Clear Filters</button>
+    </div>
+
     <h1>Halloween Watch-a</h1>
-    <p>Click the button to pull a random card from the deck!</p>
-    <button id="pull">Pull a Card</button>
+    <p>Click to pick a random movie from the deck!</p>
+    <button id="pull">Pick a Flick</button>
     <br /><br />
     <div id="pulled-card"></div>
     <br />
@@ -199,7 +262,16 @@ document.querySelector('#app').innerHTML = `
       <div id="cards"></div>
     </details>
   </div>
-`
+
+<script>
+// Debug toggle - set to false to hide the debug window
+const debug = false;
+
+// TMDB API key - get your free key from https://www.themoviedb.org/settings/api
+const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
+
+let allCards = [];
+let filteredCards = [];
 
 // Function to update card image in DOM
 function updateCardImage(card) {
@@ -297,14 +369,20 @@ async function fetchImage(card, triedWithYear = true) {
 
     if (poster) {
       card.image = `https://image.tmdb.org/t/p/w200/${poster}`;
+      card.fetchFailed = false; // Mark as successful
       updateCardImage(card);
       updateCardLinks(card);
-    } else if (debug && !triedWithYear) {
-      // Only log to debug window if even the title-only search failed
-      const linkHtml = card.name;
-      document.getElementById('debug-window').innerHTML += `<p>Failed (All attempts): ${linkHtml}</p>`;
+    } else {
+      card.fetchFailed = true;
+      
+      if (debug && !triedWithYear) {
+        // Only log to debug window if even the title-only search failed
+        const linkHtml = card.name;
+        document.getElementById('debug-window').innerHTML += `<p>Failed (All attempts): ${linkHtml}</p>`;
+      }
     }
   } catch (e) {
+    card.fetchFailed = true;
     console.error('Error fetching image for', card.name, e);
   }
 }
@@ -332,7 +410,8 @@ async function loadCards() {
         genres: values[6].replace(/^"|"$/g, '').trim(), 
         image: 'https://via.placeholder.com/150',
         id: null,
-        isTV: false
+        isTV: false,
+        fetchFailed: false
       };
       if (card.name) {
         cards.push(card);
@@ -342,14 +421,34 @@ async function loadCards() {
   return cards;
 }
 
+// Setup genres for filtering
+function populateGenres(cards) {
+  const genres = new Set();
+  cards.forEach(c => {
+    c.genres.split(',').forEach(g => genres.add(g.trim()));
+  });
+  
+  const container = document.getElementById('genre-container');
+  Array.from(genres).sort().forEach(genre => {
+    if(!genre) return;
+    const div = document.createElement('div');
+    div.className = 'genre-item';
+    div.innerHTML = `<input type="checkbox" value="${genre}" class="genre-checkbox"> ${genre}`;
+    container.appendChild(div);
+  });
+}
+
 // Function to get CSS class based on age rating
 function getClass(ageRating) {
   switch (ageRating) {
-    case 'G': return 'g';
-    case 'PG-13': return 'pg13';
-    case 'TV-MA': return 'tvma';
-    case 'R': return 'r';
-    case 'NR': return 'nr';
+    case 'G': return 'common';
+    case 'PG': return 'uncommon';
+    case 'TV-Y7': return 'uncommon';
+    case 'PG-13': return 'rare';
+    case 'TV-14': return 'rare';
+    case 'TV-MA': return 'epic';
+    case 'R': return 'epic';
+    case 'NR': return 'unique';
     default: return '';
   }
 }
@@ -370,8 +469,23 @@ function displayCards(cards) {
 
 // Load cards and set up interactions
 loadCards().then(cards => {
+  allCards = cards;
+  filteredCards = cards;
+  populateGenres(cards)
+
   // Display cards immediately with placeholder images
   displayCards(cards);
+
+  document.getElementById('pull').onclick = () => {
+      if (filteredCards.length === 0) return;
+      const randomCard = filteredCards[Math.floor(Math.random() * filteredCards.length)];
+      document.getElementById('pulled-card').innerHTML = `
+        <div class="card ${getClass(randomCard.ageRating)}">
+          <img src="${randomCard.image}" alt="${randomCard.name}">
+          <h3>${randomCard.name}</h3>
+          <p>${randomCard.year} | ${randomCard.ageRating}</p>
+        </div>`;
+    };
   
   // Fetch images asynchronously in the background
   cards.forEach(card => fetchImage(card));
@@ -380,13 +494,57 @@ loadCards().then(cards => {
   if (debug) {
     document.getElementById('debug-window').style.display = 'block';
   }
+
+  // Filter Logic
+  document.getElementById('filter-icon').onclick = () => {
+    const menu = document.getElementById('filter-menu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  };
+
+  // Apply filter logic
+  document.getElementById('apply-filters').onclick = () => {
+    const decade = document.getElementById('filter-decade').value;
+    const selectedGenres = Array.from(document.querySelectorAll('.genre-checkbox:checked')).map(cb => cb.value);
+    const showOnlyFailed = document.getElementById('filter-failed-images').checked;
+
+    filteredCards = allCards.filter(card => {
+      const year = parseInt(card.year);
+      const decadeMatch = (decade === 'all') || (year >= parseInt(decade) && year <= parseInt(decade) + 9);
+      
+      const movieGenres = card.genres.split(',').map(g => g.trim());
+      const genreMatch = selectedGenres.length === 0 || selectedGenres.some(sg => movieGenres.includes(sg));
+
+      // Failed Image Match
+      const imageMatch = !showOnlyFailed || (showOnlyFailed && card.fetchFailed === true);
+
+      return decadeMatch && genreMatch && imageMatch;
+    });
+
+    displayCards(filteredCards);
+    document.getElementById('filter-menu').style.display = 'none';
+  };
+
+  // Clear Filter Logic
+  document.getElementById('clear-filters').onclick = () => {
+    // Reset Inputs
+    document.getElementById('filter-decade').value = 'all';
+    document.querySelectorAll('.genre-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('filter-failed-images').checked = false;
+    
+    // Reset Data
+    filteredCards = allCards;
+    displayCards(allCards);
+    
+    // Close Menu
+    document.getElementById('filter-menu').style.display = 'none';
+  };
   
   // Pull card functionality
   const pullButton = document.getElementById('pull');
   if (pullButton) {
     pullButton.addEventListener('click', () => {
-      if (cards.length > 0) {
-        const randomCard = cards[Math.floor(Math.random() * cards.length)];
+      if (filteredCards.length > 0) {
+        const randomCard = filteredCards[Math.floor(Math.random() * filteredCards.length)];
         const pulledContainer = document.getElementById('pulled-card');
         pulledContainer.innerHTML = `
           <div class="card ${getClass(randomCard.ageRating)}">
@@ -398,8 +556,10 @@ loadCards().then(cards => {
           </div>
         `;
         
-        // Prioritize fetching the pulled card's image
+        // Ensure image is fetched/updated for the specifically pulled card
         fetchImage(randomCard);
+      } else {
+        alert("No movies match your current filters!");
       }
     });
   }
