@@ -6,9 +6,395 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎃</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Halloween Watchlist Gacha</title>
+    <style>
+#app {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
+  background-color: #1a1a1a;
+  min-height: 100vh;
+  color: #e0e0e0;
+}
+
+#app h1 {
+  color: #ffffff;
+  margin-bottom: 20px;
+}
+
+#app button {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  border: 2px solid #404040;
+  padding: 10px 20px;
+  font-size: 1em;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#app button:hover {
+  background-color: #3a3a3a;
+  border-color: #505050;
+}
+
+details {
+  margin: 20px 0;
+  text-align: left;
+  display: inline-block;
+}
+
+summary {
+  cursor: pointer;
+  color: #b0b0b0;
+  padding: 10px;
+  background-color: #2a2a2a;
+  border-radius: 5px;
+  user-select: none;
+  transition: all 0.3s;
+}
+
+body {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+  font-family: Arial, sans-serif;
+}
+
+#cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#pulled-card .card {
+  width: 200px;
+  margin: 0 auto;
+}
+
+.card {
+  border: 1px solid #404040;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 10px;
+  width: 150px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  transition: transform 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+}
+
+#pulled-card .card:hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.card img {
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+}
+
+.card h3 {
+  margin-top: 10px;
+  color: #ffffff;
+}
+
+.card p {
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #b0b0b0;
+}
+
+.g { background: linear-gradient(135deg, #2a5a2a 0%, #1a4a1a 100%); }
+.pg13 { background: linear-gradient(135deg, #2a4a7a 0%, #1a3a6a 100%); }
+.tvma { background: linear-gradient(135deg, #7a2a2a 0%, #6a1a1a 100%); }
+.r { background: linear-gradient(135deg, #7a2a2a 0%, #6a1a1a 100%); }
+.nr { background: linear-gradient(135deg, #7a5a2a 0%, #6a4a1a 100%); }
+
+.card a {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.card a:hover {
+  text-decoration: underline;
+}
+
+.card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+#debug-window {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+  padding: 10px;
+  border-radius: 5px;
+  max-width: 400px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+  font-size: 12px;
+  z-index: 1000;
+}
+
+#debug-window a {
+  color: #fff;
+}
+
+#debug-window a:hover {
+  text-decoration: underline;
+}
+    </style>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="src/main.js"></script>
+    <div id="debug-window"><h4>Failed TMDB Fetches</h4></div>
+    <script>
+// TMDB API key - get your free key from https://www.themoviedb.org/settings/api
+const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
+
+// Debug toggle - set to false to hide the debug window
+const debug = true;
+
+document.querySelector('#app').innerHTML = `
+  <div>
+    <h1>Halloween Watch-a</h1>
+    <p>Click the button to pull a random card from the deck!</p>
+    <button id="pull">Pull a Card</button>
+    <br /><br />
+    <div id="pulled-card"></div>
+    <br />
+    <details>
+      <summary>All Cards</summary>
+      <div id="cards"></div>
+    </details>
+  </div>
+`
+
+// Function to update card image in DOM
+function updateCardImage(card) {
+  const imgElements = document.querySelectorAll(`img[alt="${card.name}"]`);
+  imgElements.forEach(img => {
+    img.src = card.image;
+  });
+}
+
+// Function to add links for image and title once we know the TMDB id
+function updateCardLinks(card) {
+  if (!card.id) return;
+  const cardDiv = document.querySelector(`.card img[alt="${card.name}"]`)?.closest('.card');
+  if (!cardDiv) return;
+
+  // wrap image
+  const img = cardDiv.querySelector('img');
+  if (img && !img.closest('a')) {
+    const a = document.createElement('a');
+    a.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
+    a.target = '_blank';
+    a.className = 'card-link';
+    img.parentNode.insertBefore(a, img);
+    a.appendChild(img);
+  }
+
+  // wrap title
+  const h3 = cardDiv.querySelector('h3');
+  if (h3 && !h3.querySelector('a')) {
+    const a2 = document.createElement('a');
+    a2.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
+    a2.target = '_blank';
+    a2.className = 'card-link';
+    a2.textContent = h3.textContent;
+    h3.textContent = '';
+    h3.appendChild(a2);
+  }
+}
+
+// Function to fetch image for a card
+async function fetchImage(card, triedYear = false) {
+  try {
+    let searchQuery = card.name;
+    let isTV = false;
+
+    // if we are retrying with year, adjust query or parameters later
+    const yearParam = (triedYear && card.year) ? card.year : null;
+    
+    // Check if title contains " (TV)"
+    if (searchQuery.includes(' (TV)')) {
+      searchQuery = searchQuery.replace(' (TV)', '').trim();
+      isTV = true;
+    }
+    
+    // Check if Age Rating contains "TV"
+    if (card.ageRating.includes('TV')) {
+      isTV = true;
+    }
+    
+    // Check if Genre contains "tv" or "series"
+    if (card.genres.toLowerCase().includes('tv') || card.genres.toLowerCase().includes('series')) {
+      isTV = true;
+    }
+    
+    const query = encodeURIComponent(searchQuery);
+    let url, res, data, poster = null;
+    
+    if (isTV) {
+      // Search TV only
+      // include first_air_date_year if retrying with year
+      url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}` +
+            (yearParam ? `&first_air_date_year=${yearParam}` : '');
+      res = await fetch(url);
+      data = await res.json();
+      if (data.results && data.results.length > 0) {
+        poster = data.results[0].poster_path;
+        card.id = data.results[0].id;
+        card.isTV = true;
+      }
+    } else {
+      // Try movie search first
+      url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}` +
+            (yearParam ? `&year=${yearParam}` : '');
+      res = await fetch(url);
+      data = await res.json();
+      if (data.results && data.results.length > 0) {
+        poster = data.results[0].poster_path;
+        card.id = data.results[0].id;
+        card.isTV = false;
+      } else {
+        // Try TV search (also include yearParam)
+        url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}` +
+              (yearParam ? `&first_air_date_year=${yearParam}` : '');
+        res = await fetch(url);
+        data = await res.json();
+        if (data.results && data.results.length > 0) {
+          poster = data.results[0].poster_path;
+          card.id = data.results[0].id;
+          card.isTV = true;
+        }
+      }
+    }
+    
+    // retry once with year parameter if we didn't get a result and haven't tried yet
+    if (!poster && card.year && !triedYear) {
+      console.log('retrying TMDB lookup with year', card.year, 'for', card.name);
+      return fetchImage(card, true);
+    }
+    
+    if (poster) {
+      card.image = `https://image.tmdb.org/t/p/w200/${poster}`;
+      updateCardImage(card); // Update the image in the DOM
+      // update links now that we know the TMDB ID
+      updateCardLinks(card);
+    } else {
+      console.error('No poster found for:', card.name);
+      if (debug) {
+        const linkHtml = card.id ? `<a href="https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}" target="_blank">${card.name}</a>` : card.name;
+        document.getElementById('debug-window').innerHTML += `<p>${linkHtml}</p>`;
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching image for', card.name, e);
+  }
+}
+
+// Function to load cards from Google Sheets CSV
+async function loadCards() {
+  const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS6hB593EeMhDH09J7d2NCTX3C1yZ3w1M9JfuONdcwxBPqmg1ThG1CxevHRuvzYk6YKfvVHsvYVh3ed/pub?gid=0&single=true&output=csv';
+  const response = await fetch(url);
+  const csvText = await response.text();
+  const lines = csvText.split('\n');
+  const headers = lines[0].split(',');
+  const cards = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',');
+    if (values.length >= 7) { // Assuming at least 7 columns: A,B,C,D,E,F,G
+      const card = {
+        name: values[2].trim().replace(/^"|"$/g, '').replace(/ \(\d{4}\)$/, ''), // Column C: title, remove quotes and year
+        ageRating: values[4].trim(), // Column E: Age Rating
+        year: values[5].trim(), // Column F: Year
+        genres: values[6].trim().replace(/^"|"$/g, ''), // Column G: Genre(s)
+        image: 'https://via.placeholder.com/150', // Placeholder image
+        id: null,
+        isTV: false
+      };
+      if (card.name) { // Only add if name exists
+        cards.push(card);
+      }
+    }
+  }
+  return cards;
+}
+
+// Function to get CSS class based on age rating
+function getClass(ageRating) {
+  switch (ageRating) {
+    case 'G': return 'g';
+    case 'PG-13': return 'pg13';
+    case 'TV-MA': return 'tvma';
+    case 'R': return 'r';
+    case 'NR': return 'nr';
+    default: return '';
+  }
+}
+
+// Function to display cards
+function displayCards(cards) {
+  const cardsContainer = document.getElementById('cards');
+  cardsContainer.innerHTML = cards.map(card => `
+    <div class="card ${getClass(card.ageRating)}">
+      <img src="${card.image}" alt="${card.name}" onerror="this.src='default.webp'">
+      <h3><a href="${card.id ? `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(card.name)}`}" target="_blank" class="card-link">${card.name}</a></h3>
+      <p>Age Rating: ${card.ageRating}</p>
+      <p>Year: ${card.year}</p>
+      <p>Genres: ${card.genres}</p>
+    </div>
+  `).join('');
+}
+
+// Load cards and set up interactions
+loadCards().then(cards => {
+  // Display cards immediately with placeholder images
+  displayCards(cards);
+  
+  // Fetch images asynchronously in the background
+  cards.forEach(card => fetchImage(card));
+  
+  // Enable debug window if toggled
+  if (debug) {
+    document.getElementById('debug-window').style.display = 'block';
+  }
+  
+  // Pull card functionality
+  const pullButton = document.getElementById('pull');
+  if (pullButton) {
+    pullButton.addEventListener('click', () => {
+      if (cards.length > 0) {
+        const randomCard = cards[Math.floor(Math.random() * cards.length)];
+        const pulledContainer = document.getElementById('pulled-card');
+        pulledContainer.innerHTML = `
+          <div class="card ${getClass(randomCard.ageRating)}">
+            <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.png'">
+            <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
+            <p>Age Rating: ${randomCard.ageRating}</p>
+            <p>Year: ${randomCard.year}</p>
+            <p>Genres: ${randomCard.genres}</p>
+          </div>
+        `;
+        
+        // Prioritize fetching the pulled card's image
+        fetchImage(randomCard);
+      }
+    });
+  }
+}).catch(e => console.error('Error loading cards:', e));
+    </script>
   </body>
 </html>
