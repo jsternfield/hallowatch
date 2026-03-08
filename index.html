@@ -7,6 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Halloween Watchlist Gacha</title>
     <style>
+
+/* #region App styles */
 #app {
   font-family: Arial, sans-serif;
   text-align: center;
@@ -60,8 +62,9 @@ body {
 }
 
 #app { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #1a1a1a; min-height: 100vh; color: #e0e0e0; position: relative; }
-      
-/* Filter Icon & Menu Styles */
+/* #endregion App styles */
+
+/* #region Filter Icon & Menu Styles */
 #filter-icon {
   position: absolute;
   top: 20px;
@@ -96,7 +99,9 @@ body {
   background-color: #4a4a4a !important;
   margin-top: 10px;
 }
+/* #endregion Filter Icon & Menu Styles */
 
+/* #region Card Styles */
 #cards {
   display: flex;
   flex-wrap: wrap;
@@ -207,7 +212,9 @@ body {
   text-decoration: none;
   color: inherit;
 }
+/* #endregion Card Styles */
 
+/* #region Debug Window Styles */
 #debug-window {
   position: fixed;
   top: 10px;
@@ -231,11 +238,61 @@ body {
 #debug-window a:hover {
   text-decoration: underline;
 }
+/* #endregion Debug Window Styles */
+
+/* #region Custom Scroll Scrubber style */
+/* Container for the list and the custom scrollbar */
+#all-cards-container {
+  position: relative;
+  display: flex;
+  max-height: 70vh; /* Limits height so it's a scrollable box */
+  background: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  overflow: hidden; /* Hide default scrollbar */
+}
+
+#cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  overflow-y: scroll; /* Enable internal scrolling */
+  width: 100%;
+  padding: 10px;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+#cards::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome/Safari */
+}
+
+/* Scrubber localized to the container */
+#custom-scrubber-track {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  bottom: 5px;
+  width: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+#custom-scrubber-handle {
+  width: 100%;
+  height: 100px;
+  background: #ff9800;
+  border-radius: 5px;
+  position: absolute;
+  top: 0;
+}
+/* #endregion Custom Scroll Scrubber style */
 </style>
 </head>
 
 <body>
-    <div id="app">      
+    <div id="app">
     <div id="debug-window"><h4>Failed TMDB Fetches</h4></div>
 
     <img src="filter-icon.png" id="filter-icon" alt="Filter">
@@ -278,7 +335,12 @@ body {
     <br />
     <details>
       <summary>All Cards</summary>
+      <div id="all-cards-container">
       <div id="cards"></div>
+      <div id="custom-scrubber-track">
+        <div id="custom-scrubber-handle"></div>
+      </div>
+    </div>
     </details>
   </div>
 
@@ -337,7 +399,8 @@ async function fetchImage(card, triedWithYear = true) {
       searchQuery = searchQuery.replace(' (TV)', '').trim();
       isTV = true;
     }
-    if (card.ageRating.includes('TV') || card.genres.toLowerCase().includes('tv') || card.genres.toLowerCase().includes('series')) {
+    if (card.ageRating.includes('TV') || card.genres.toLowerCase().includes('series') ||
+      (card.genres.toLowerCase().includes('tv') && !card.genres.toLowerCase().includes('movie'))) {
       isTV = true;
     }
 
@@ -582,6 +645,40 @@ loadCards().then(cards => {
       }
     });
   }
+
+  // SCROLL BAR SCRUBBER LOGIC
+  const cardsDiv = document.getElementById('cards');
+  const track = document.getElementById('custom-scrubber-track');
+  const handle = document.getElementById('custom-scrubber-handle');
+
+  function handleScrub(e) {
+    const rect = track.getBoundingClientRect();
+    let percentage = (e.clientY - rect.top) / rect.height;
+    percentage = Math.max(0, Math.min(1, percentage));
+
+    // Scroll the internal div, not the window
+    const scrollTarget = (cardsDiv.scrollHeight - cardsDiv.clientHeight) * percentage;
+    cardsDiv.scrollTop = scrollTarget;
+  }
+
+  // Handle Dragging
+  track.addEventListener('mousedown', (e) => {
+    handleScrub(e);
+    const onMouseMove = (move) => handleScrub(move);
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
+  // Update handle position when user scrolls the div normally
+  cardsDiv.addEventListener('scroll', () => {
+    const scrollPct = cardsDiv.scrollTop / (cardsDiv.scrollHeight - cardsDiv.clientHeight);
+    const availableTrackSpace = track.clientHeight - handle.clientHeight;
+    handle.style.top = (scrollPct * availableTrackSpace) + 'px';
+  });
 }).catch(e => console.error('Error loading cards:', e));
     </script>
   </body>
