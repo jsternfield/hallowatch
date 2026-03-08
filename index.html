@@ -124,20 +124,39 @@ body {
   width: 100%;
 }
 
-@media (max-width: 240px) {
+/* Responsive Grid for Mobile and Tablets */
+@media (max-width: 1000px) {
+  #cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between; /* Distributes cards evenly */
+    padding: 10px;
+  }
+
   .card {
-    /* Forces 2 columns by setting width to just under 50% */
-    width: 45%; 
-    margin: 5px;
-    padding: 5px;
-    font-size: 0.8em;
+    /* Calculates width for 2 columns minus margins */
+    width: calc(50% - 20px); 
+    max-width: none; 
+    margin: 10px 5px;
+    padding: 8px;
+    font-size: 0.9em;
   }
   
   #pulled-card .card {
-    /* Keeps the 'Pulled' result large and centered */
-    width: 50%;
-    max-width: 240px;
+    /* Keeps the 'Pick a Flick' result large and centered */
+    width: 60%;
+    max-width: 300px;
     margin: 0 auto;
+  }
+}
+
+/* Extra small devices adjustment */
+@media (max-width: 400px) {
+  .card h3 {
+    font-size: 1em;
+  }
+  .card p {
+    font-size: 0.8em;
   }
 }
 
