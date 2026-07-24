@@ -717,7 +717,7 @@ loadCards().then(cards => {
 
       let data = await res.json();
 
-      // Step 2: Fall back to TV endpoint if Movie returned nothing (and vice versa)
+      // Step 2: Fall back to TV endpoint if Movie returned nothing
       if ((!data.results || data.results.length === 0) && !isTV) {
         url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}`;
         res = await fetch(url);
@@ -730,14 +730,12 @@ loadCards().then(cards => {
       if (data.results && data.results.length > 0) {
         const targetYear = parseInt(card.year, 10);
         
-        // Step 3: Pick the best matching result based on year proximity
         let bestMatch = data.results.find(item => {
           const releaseDate = item.release_date || item.first_air_date || '';
           const itemYear = parseInt(releaseDate.split('-')[0], 10);
           return itemYear === targetYear;
         });
 
-        // If no exact year match, take the very first search result
         if (!bestMatch) {
           bestMatch = data.results[0];
         }
@@ -749,7 +747,7 @@ loadCards().then(cards => {
           card.fetchFailed = false;
           updateCardImage(card);
           updateCardLinks(card);
-          return;
+          return card.image; // Return the fetched image URL
         }
       }
 
@@ -762,6 +760,7 @@ loadCards().then(cards => {
       card.fetchFailed = true;
       console.error('Error fetching image for', card.name, e);
     }
+    return 'default.webp';
   }
 
   // Queue system to load cards in batches to prevent flooding TMDB
@@ -838,7 +837,7 @@ loadCards().then(cards => {
 
   const pullButton = document.getElementById('pull');
   if (pullButton) {
-    pullButton.addEventListener('click', () => {
+    pullButton.addEventListener('click', async () => {
       if (filteredCards.length === 0) {
         alert("No movies match your current filters!");
         return;
@@ -847,16 +846,12 @@ loadCards().then(cards => {
       // Determine available pool excluding recent picks
       let availableCards = filteredCards.filter(card => !recentPicks.includes(card.name));
 
-      // Fallback: If filtered list is smaller than or equal to 3 (or all matching choices are in history),
-      // reduce history exclusion to whatever is left or fall back to the whole filtered list
       if (availableCards.length === 0) {
         availableCards = filteredCards;
       }
 
-      // Pick random card from available pool
       const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
 
-      // Update recent picks history (keep only the last 3)
       recentPicks.push(randomCard.name);
       if (recentPicks.length > 3) {
         recentPicks.shift();
@@ -868,10 +863,15 @@ loadCards().then(cards => {
       const safeName = randomCard.name.replace(/'/g, "\\'");
       const safeYear = randomCard.year.replace(/'/g, "\\'");
 
+      // Determine initial image source to avoid immediate default flash
+      const initialSrc = (randomCard.image && randomCard.image !== 'default.webp') 
+        ? randomCard.image 
+        : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
       pulledContainer.innerHTML = `
         <div class="card ${getClass(randomCard.ageRating)}" data-key="${cardKey}">
           <button class="star-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${safeName}', '${safeYear}')">★</button>
-          <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.webp'">
+          <img id="pulled-img" src="${initialSrc}" alt="${randomCard.name.replace(/"/g, '&quot;')}" onerror="this.onerror=null; this.src='default.webp';">
           <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
           <p>Age Rating: ${randomCard.ageRating}</p>
           <p>Year: ${randomCard.year}</p>
@@ -879,7 +879,23 @@ loadCards().then(cards => {
         </div>
       `;
 
-      fetchImage(randomCard);
+      // Only start timer/fetch if we don't already have the real image cached
+      if (!randomCard.image || randomCard.image === 'default.webp') {
+        const imgElement = document.getElementById('pulled-img');
+
+        // Set up 1-second fallback timer
+        const fallbackTimer = setTimeout(() => {
+          if (imgElement) imgElement.src = 'default.webp';
+        }, 1000);
+
+        // Fetch image from TMDB
+        const fetchedUrl = await fetchImage(randomCard);
+        clearTimeout(fallbackTimer);
+
+        if (imgElement) {
+          imgElement.src = fetchedUrl || 'default.webp';
+        }
+      }
     });
   }
 // #endregion
