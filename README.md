@@ -2,6 +2,8 @@
 
 A simple Gacha style website to pick a movie to watch.
 
+visit: https://jsternfield.github.io/hallowatch/
+
 ## Features
 
 - Display a collection of cards loaded from a Google Sheets CSV
