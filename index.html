@@ -109,6 +109,7 @@ body {
 }
 
 .card {
+  position: relative; /* Added for absolute positioning of the star icon */
   border: 1px solid #404040;
   border-radius: 8px;
   padding: 10px;
@@ -122,6 +123,32 @@ body {
   transition: transform 0.2s;
   box-sizing: border-box; /* Ensures padding doesn't break the width */
 }
+
+/* #region Star Icon Styles */
+.star-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6) !important;
+  border: none !important;
+  color: #888 !important;
+  font-size: 1.2em;
+  padding: 2px 6px !important;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 5;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.star-btn:hover {
+  transform: scale(1.2);
+}
+
+.star-btn.active {
+  color: #ffd700 !important; /* Gold color when starred */
+  text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+}
+/* #endregion Star Icon Styles */
 
 #pulled-card {
   display: flex;
@@ -319,6 +346,10 @@ body {
             <label>Genres</label>
             <div id="genre-container" class="genre-list"></div>
         </div>
+        <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 8px;">
+          <input type="checkbox" id="filter-favorites" style="margin-right: 8px;"> 
+          Favorites Only ⭐
+        </label>
         <label style="display: flex; align-items: center; cursor: pointer;">
           <input type="checkbox" id="filter-failed-images" style="margin-right: 8px;"> 
           Debug: Failed Images
@@ -354,21 +385,57 @@ const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
 let allCards = [];
 let filteredCards = [];
 
+// #region Favorites Management
+function getFavorites() {
+  return JSON.parse(localStorage.getItem('favoriteMovies') || '[]');
+}
+
+function saveFavorites(favorites) {
+  localStorage.setItem('favoriteMovies', JSON.stringify(favorites));
+}
+
+function getCardKey(name, year) {
+  return `${name} (${year})`;
+}
+
+function toggleFavorite(cardName, cardYear) {
+  const cardKey = getCardKey(cardName, cardYear);
+  let favorites = getFavorites();
+
+  if (favorites.includes(cardKey)) {
+    favorites = favorites.filter(key => key !== cardKey);
+  } else {
+    favorites.push(cardKey);
+  }
+  saveFavorites(favorites);
+  
+  // Update star buttons on all instances matching this unique key
+  document.querySelectorAll(`.card[data-key="${CSS.escape(cardKey)}"] .star-btn`).forEach(btn => {
+    btn.classList.toggle('active', favorites.includes(cardKey));
+  });
+}
+// #endregion Favorites Management
+
 // Function to update card image in DOM
 function updateCardImage(card) {
-  const imgElements = document.querySelectorAll(`img[alt="${card.name}"]`);
-  imgElements.forEach(img => {
-    img.src = card.image;
+  const cardKey = getCardKey(card.name, card.year);
+  const cardDivs = document.querySelectorAll(`.card[data-key="${CSS.escape(cardKey)}"]`);
+  
+  cardDivs.forEach(div => {
+    const img = div.querySelector('img');
+    if (img) {
+      img.src = card.image;
+    }
   });
 }
 
 // Function to add links for image and title once we know the TMDB id
 function updateCardLinks(card) {
   if (!card.id) return;
-  const cardDiv = document.querySelector(`.card img[alt="${card.name}"]`)?.closest('.card');
+  const cardKey = getCardKey(card.name, card.year);
+  const cardDiv = document.querySelector(`.card[data-key="${CSS.escape(cardKey)}"]`);
   if (!cardDiv) return;
 
-  // Update or wrap image link
   const img = cardDiv.querySelector('img');
   if (img) {
     let imgAnchor = img.closest('a');
@@ -382,7 +449,6 @@ function updateCardLinks(card) {
     imgAnchor.className = 'card-link';
   }
 
-  // Update Title link from generic search to specific TMDB ID
   const titleLink = cardDiv.querySelector('h3 a');
   if (titleLink) {
     titleLink.href = `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}`;
@@ -421,7 +487,7 @@ async function fetchImage(card, triedWithYear = true) {
       }
     } else {
       url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}` +
-            (yearParam ? `&primary_release_year=${yearParam}` : '');
+            (yearParam ? `&year=${yearParam}` : '');
       res = await fetch(url);
       data = await res.json();
       
@@ -469,6 +535,48 @@ async function fetchImage(card, triedWithYear = true) {
   }
 }
 
+// #region Intersection Observer Setup
+let imageObserver = null;
+
+function setupImageObserver() {
+  // Observe cards relative to the scrollable #cards container
+  const container = document.getElementById('cards');
+
+  imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const cardDiv = entry.target;
+        const cardKey = cardDiv.getAttribute('data-key');
+        
+        // Find matching card object
+        const card = allCards.find(c => getCardKey(c.name, c.year) === cardKey);
+        
+        if (card && card.image === 'default.webp' && !card.isFetching) {
+          card.isFetching = true; // Guard against duplicate fetches
+          fetchImage(card);
+        }
+
+        // Stop watching this card once triggered
+        observer.unobserve(cardDiv);
+      }
+    });
+  }, {
+    root: container,
+    rootMargin: '100px', // Preload images 100px before they scroll into view
+    threshold: 0.1
+  });
+}
+
+function observeVisibleCards() {
+  if (!imageObserver) setupImageObserver();
+  
+  // Attach observer to all rendered card elements
+  document.querySelectorAll('#cards .card').forEach(cardEl => {
+    imageObserver.observe(cardEl);
+  });
+}
+// #endregion - Intersection Observer Setup
+
 // Function to load cards from Google Sheets CSV
 async function loadCards() {
   const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS6hB593EeMhDH09J7d2NCTX3C1yZ3w1M9JfuONdcwxBPqmg1ThG1CxevHRuvzYk6YKfvVHsvYVh3ed/pub?gid=0&single=true&output=csv';
@@ -490,7 +598,7 @@ async function loadCards() {
         year: values[5].replace(/^"|"$/g, '').trim(),
         // Keep internal commas but remove wrapping quotes
         genres: values[6].replace(/^"|"$/g, '').trim(), 
-        image: 'https://via.placeholder.com/150',
+        image: 'default.webp', //image: 'https://via.placeholder.com/150',
         id: null,
         isTV: false,
         fetchFailed: false
@@ -511,7 +619,7 @@ function populateGenres(cards) {
   });
   
   const container = document.getElementById('genre-container');
-  Array.from(genres).sort().forEach(genre => {
+  Array.from(genres).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(genre => {
     if(!genre) return;
     const div = document.createElement('div');
     div.className = 'genre-item';
@@ -536,18 +644,33 @@ function getClass(ageRating) {
 }
 
 // Function to display cards
+// #region DISPLAY CARDS
 function displayCards(cards) {
   const cardsContainer = document.getElementById('cards');
-  cardsContainer.innerHTML = cards.map(card => `
-    <div class="card ${getClass(card.ageRating)}">
-      <img src="${card.image}" alt="${card.name}" onerror="this.src='default.webp'">
-      <h3><a href="${card.id ? `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(card.name)}`}" target="_blank" class="card-link">${card.name}</a></h3>
-      <p>Age Rating: ${card.ageRating}</p>
-      <p>Year: ${card.year}</p>
-      <p>Genres: ${card.genres}</p>
-    </div>
-  `).join('');
+  const favorites = getFavorites();
+
+  cardsContainer.innerHTML = cards.map(card => {
+    const cardKey = getCardKey(card.name, card.year);
+    const isFav = favorites.includes(cardKey);
+    const safeName = card.name.replace(/'/g, "\\'");
+    const safeYear = card.year.replace(/'/g, "\\'");
+
+    return `
+      <div class="card ${getClass(card.ageRating)}" data-key="${cardKey}">
+        <button class="star-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${safeName}', '${safeYear}')">★</button>
+        <img src="${card.image}" alt="${card.name}" onerror="this.onerror=null; this.src='default.webp';">
+        <h3><a href="${card.id ? `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(card.name)}`}" target="_blank" class="card-link">${card.name}</a></h3>
+        <p>Age Rating: ${card.ageRating}</p>
+        <p>Year: ${card.year}</p>
+        <p>Genres: ${card.genres}</p>
+      </div>
+    `;
+  }).join('');
+
+  // Observe newly displayed cards
+  observeVisibleCards();
 }
+// #endregion DISPLAY CARDS
 
 // Load cards and set up interactions
 loadCards().then(cards => {
@@ -558,20 +681,99 @@ loadCards().then(cards => {
   // Display cards immediately with placeholder images
   displayCards(cards);
 
-  document.getElementById('pull').onclick = () => {
-      if (filteredCards.length === 0) return;
-      const randomCard = filteredCards[Math.floor(Math.random() * filteredCards.length)];
-      document.getElementById('pulled-card').innerHTML = `
-        <div class="card ${getClass(randomCard.ageRating)}">
-          <img src="${randomCard.image}" alt="${randomCard.name}">
-          <h3>${randomCard.name}</h3>
-          <p>${randomCard.year} | ${randomCard.ageRating}</p>
-        </div>`;
-    };
+  // Start batch fetching images in the background
+  //fetchImagesInBatches(cards, 5, 100);
   
   // Fetch images asynchronously in the background
-  cards.forEach(card => fetchImage(card));
-  
+  // Helper for introducing a delay
+// #region FETCH IMAGE
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function fetchImage(card, retries = 3) {
+    try {
+      let searchQuery = card.name;
+      let isTV = false;
+
+      if (searchQuery.includes(' (TV)')) {
+        searchQuery = searchQuery.replace(' (TV)', '').trim();
+        isTV = true;
+      }
+      if (card.ageRating.includes('TV') || card.genres.toLowerCase().includes('series') ||
+        (card.genres.toLowerCase().includes('tv') && !card.genres.toLowerCase().includes('movie'))) {
+        isTV = true;
+      }
+
+      const query = encodeURIComponent(searchQuery);
+      const endpoint = isTV ? 'tv' : 'movie';
+      
+      // Step 1: Query WITHOUT any year constraints
+      let url = `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_API_KEY}&query=${query}`;
+      let res = await fetch(url);
+
+      if (res.status === 429 && retries > 0) {
+        await sleep(1000);
+        return fetchImage(card, retries - 1);
+      }
+
+      let data = await res.json();
+
+      // Step 2: Fall back to TV endpoint if Movie returned nothing (and vice versa)
+      if ((!data.results || data.results.length === 0) && !isTV) {
+        url = `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}`;
+        res = await fetch(url);
+        data = await res.json();
+        if (data.results && data.results.length > 0) {
+          isTV = true;
+        }
+      }
+
+      if (data.results && data.results.length > 0) {
+        const targetYear = parseInt(card.year, 10);
+        
+        // Step 3: Pick the best matching result based on year proximity
+        let bestMatch = data.results.find(item => {
+          const releaseDate = item.release_date || item.first_air_date || '';
+          const itemYear = parseInt(releaseDate.split('-')[0], 10);
+          return itemYear === targetYear;
+        });
+
+        // If no exact year match, take the very first search result
+        if (!bestMatch) {
+          bestMatch = data.results[0];
+        }
+
+        if (bestMatch.poster_path) {
+          card.image = `https://image.tmdb.org/t/p/w200${bestMatch.poster_path}`;
+          card.id = bestMatch.id;
+          card.isTV = isTV;
+          card.fetchFailed = false;
+          updateCardImage(card);
+          updateCardLinks(card);
+          return;
+        }
+      }
+
+      card.fetchFailed = true;
+    } catch (e) {
+      if (retries > 0) {
+        await sleep(1000);
+        return fetchImage(card, retries - 1);
+      }
+      card.fetchFailed = true;
+      console.error('Error fetching image for', card.name, e);
+    }
+  }
+
+  // Queue system to load cards in batches to prevent flooding TMDB
+  async function fetchImagesInBatches(cards, batchSize = 5, delayMs = 200) {
+    for (let i = 0; i < cards.length; i += batchSize) {
+      const batch = cards.slice(i, i + batchSize);
+      await Promise.all(batch.map(card => fetchImage(card)));
+      await sleep(delayMs); // Pause slightly between batches
+    }
+  }
+// #endregion - FETCH IMAGE
+
   // Enable debug window if toggled
   if (debug) {
     document.getElementById('debug-window').style.display = 'block';
@@ -583,68 +785,104 @@ loadCards().then(cards => {
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   };
 
-  // Apply filter logic
+// #region Apply Filter Logic
   document.getElementById('apply-filters').onclick = () => {
     const decade = document.getElementById('filter-decade').value;
     const selectedGenres = Array.from(document.querySelectorAll('.genre-checkbox:checked')).map(cb => cb.value);
-    const showOnlyFailed = document.getElementById('filter-failed-images').checked;
+    
+    // Safe checks using optional chaining or fallback booleans
+    const showOnlyFailed = document.getElementById('filter-failed-images')?.checked || false;
+    const showOnlyFavorites = document.getElementById('filter-favorites')?.checked || false;
+    
+    // Safely grab favorites array
+    const favorites = (typeof getFavorites === 'function') ? getFavorites() : [];
 
     filteredCards = allCards.filter(card => {
       const year = parseInt(card.year);
       const decadeMatch = (decade === 'all') || (year >= parseInt(decade) && year <= parseInt(decade) + 9);
       
-      const movieGenres = card.genres.split(',').map(g => g.trim());
+      const movieGenres = card.genres ? card.genres.split(',').map(g => g.trim()) : [];
       const genreMatch = selectedGenres.length === 0 || selectedGenres.some(sg => movieGenres.includes(sg));
 
-      // Failed Image Match
       const imageMatch = !showOnlyFailed || (showOnlyFailed && card.fetchFailed === true);
+      
+      const favoriteMatch = !showOnlyFavorites || favorites.includes(getCardKey(card.name, card.year));
 
-      return decadeMatch && genreMatch && imageMatch;
+      return decadeMatch && genreMatch && imageMatch && favoriteMatch;
     });
 
     displayCards(filteredCards);
     document.getElementById('filter-menu').style.display = 'none';
   };
+// #endregion
 
   // Clear Filter Logic
   document.getElementById('clear-filters').onclick = () => {
-    // Reset Inputs
     document.getElementById('filter-decade').value = 'all';
     document.querySelectorAll('.genre-checkbox').forEach(cb => cb.checked = false);
-    document.getElementById('filter-failed-images').checked = false;
     
-    // Reset Data
+    const failedCB = document.getElementById('filter-failed-images');
+    if (failedCB) failedCB.checked = false;
+    
+    const favCB = document.getElementById('filter-favorites');
+    if (favCB) favCB.checked = false;
+    
     filteredCards = allCards;
     displayCards(allCards);
-    
-    // Close Menu
     document.getElementById('filter-menu').style.display = 'none';
   };
   
-  // Pull card functionality
+// #region Pull card functionality
+  // Store up to the last 3 pulled movie names
+  let recentPicks = [];
+
   const pullButton = document.getElementById('pull');
   if (pullButton) {
     pullButton.addEventListener('click', () => {
-      if (filteredCards.length > 0) {
-        const randomCard = filteredCards[Math.floor(Math.random() * filteredCards.length)];
-        const pulledContainer = document.getElementById('pulled-card');
-        pulledContainer.innerHTML = `
-          <div class="card ${getClass(randomCard.ageRating)}">
-            <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.webp'">
-            <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
-            <p>Age Rating: ${randomCard.ageRating}</p>
-            <p>Year: ${randomCard.year}</p>
-            <p>Genres: ${randomCard.genres}</p>
-          </div>
-        `;
-        
-        // Ensure image is fetched/updated for the specifically pulled card
-        fetchImage(randomCard);
-      } else {
+      if (filteredCards.length === 0) {
         alert("No movies match your current filters!");
+        return;
       }
+
+      // Determine available pool excluding recent picks
+      let availableCards = filteredCards.filter(card => !recentPicks.includes(card.name));
+
+      // Fallback: If filtered list is smaller than or equal to 3 (or all matching choices are in history),
+      // reduce history exclusion to whatever is left or fall back to the whole filtered list
+      if (availableCards.length === 0) {
+        availableCards = filteredCards;
+      }
+
+      // Pick random card from available pool
+      const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
+
+      // Update recent picks history (keep only the last 3)
+      recentPicks.push(randomCard.name);
+      if (recentPicks.length > 3) {
+        recentPicks.shift();
+      }
+
+      const pulledContainer = document.getElementById('pulled-card');
+      const cardKey = getCardKey(randomCard.name, randomCard.year);
+      const isFav = getFavorites().includes(cardKey);
+      const safeName = randomCard.name.replace(/'/g, "\\'");
+      const safeYear = randomCard.year.replace(/'/g, "\\'");
+
+      pulledContainer.innerHTML = `
+        <div class="card ${getClass(randomCard.ageRating)}" data-key="${cardKey}">
+          <button class="star-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${safeName}', '${safeYear}')">★</button>
+          <img src="${randomCard.image}" alt="${randomCard.name}" onerror="this.src='default.webp'">
+          <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
+          <p>Age Rating: ${randomCard.ageRating}</p>
+          <p>Year: ${randomCard.year}</p>
+          <p>Genres: ${randomCard.genres}</p>
+        </div>
+      `;
+
+      fetchImage(randomCard);
     });
   }
+// #endregion
 
   // SCROLL BAR SCRUBBER LOGIC
   const cardsDiv = document.getElementById('cards');

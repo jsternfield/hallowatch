@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TMDB Debugger</title>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #eee; padding: 20px; }
+    .test-case { border: 1px solid #404040; margin-bottom: 20px; padding: 15px; border-radius: 8px; background: #222; }
+    .success { border-color: #2e7d32; }
+    .failed { border-color: #c62828; }
+    .log { background: #111; padding: 8px; margin-top: 5px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+    img { height: 120px; vertical-align: top; margin-top: 10px; border-radius: 4px; }
+    h3 { margin-top: 0; }
+  </style>
+</head>
+<body>
+  <h1>TMDB Endpoint Inspector</h1>
+  <button onclick="runTests()">Run Debug Suite</button>
+  <div id="results" style="margin-top:20px;"></div>
+
+  <script>
+    const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
+
+    const testTargets = [
+      { name: "Never Hike Alone: A Friday The 13th Fan Film", year: "2017" },
+      { name: "Terrifier", year: "2018" },
+      { name: "The Invisble Man", year: "2020" },
+      { name: "The Watcher", year: "2025" },
+      { name: "Tower of Terror", year: "1997" }
+    ];
+
+    async function queryTMDB(type, query, year) {
+      const yearParam = year ? (type === 'tv' ? `&first_air_date_year=${year}` : `&primary_release_year=${year}`) : '';
+      const url = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}${yearParam}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return { url, data };
+    }
+
+    async function runTests() {
+      const container = document.getElementById('results');
+      container.innerHTML = 'Running...';
+
+      let html = '';
+
+      for (const target of testTargets) {
+        let logs = [];
+        let posterPath = null;
+        let matchedTitle = null;
+
+        // Step 1: Standard Movie Search (Title + Year)
+        let step1 = await queryTMDB('movie', target.name, target.year);
+        if (step1.data.results && step1.data.results.length > 0) {
+          posterPath = step1.data.results[0].poster_path;
+          matchedTitle = step1.data.results[0].title;
+          logs.push(`[Movie + Year] SUCCESS -> Matched: "${matchedTitle}"`);
+        } else {
+          logs.push(`[Movie + Year] FAIL -> 0 results found`);
+
+          // Step 2: Movie Search without Year
+          let step2 = await queryTMDB('movie', target.name, null);
+          if (step2.data.results && step2.data.results.length > 0) {
+            posterPath = step2.data.results[0].poster_path;
+            matchedTitle = step2.data.results[0].title;
+            const actualYear = (step2.data.results[0].release_date || '').split('-')[0];
+            logs.push(`[Movie No Year] SUCCESS -> Matched: "${matchedTitle}" (Actual TMDB Year: ${actualYear})`);
+          } else {
+            logs.push(`[Movie No Year] FAIL -> 0 results found`);
+
+            // Step 3: TV Search
+            let step3 = await queryTMDB('tv', target.name, null);
+            if (step3.data.results && step3.data.results.length > 0) {
+              posterPath = step3.data.results[0].poster_path;
+              matchedTitle = step3.data.results[0].name;
+              logs.push(`[TV Search] SUCCESS -> Matched TV Show: "${matchedTitle}"`);
+            } else {
+              logs.push(`[TV Search] FAIL -> 0 results found`);
+            }
+          }
+        }
+
+        const isSuccess = Boolean(posterPath);
+        html += `
+          <div class="test-case ${isSuccess ? 'success' : 'failed'}">
+            <h3>${target.name} (${target.year}) - ${isSuccess ? 'RESOLVED' : 'FAILED'}</h3>
+            <div class="log">${logs.join('\n')}</div>
+            ${posterPath ? `<img src="https://image.tmdb.org/t/p/w200${posterPath}">` : ''}
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
