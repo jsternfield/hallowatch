@@ -845,23 +845,28 @@ loadCards().then(cards => {
         return;
       }
 
-      // Determine available pool excluding recent picks
-      let availableCards = filteredCards.filter(card => !recentPicks.includes(card.name));
+      // Determine available pool excluding recent picks, and ensure we don't pick the immediate last pick (unless list size is 1)
+      let availableCards = filteredCards.filter(card => {
+        if (recentPicks.length === 0) return true;
+        const lastPick = recentPicks[recentPicks.length - 1];
+        if (filteredCards.length > 1 && card.name === lastPick) return false;
+        return !recentPicks.includes(card.name);
+      });
 
-      // If all cards in the current filter have been picked, reset the list
+      // If all cards have been picked, reset the list and pick from the full filtered pool
       if (availableCards.length === 0) {
         recentPicks = [];
-        availableCards = filteredCards;
+        availableCards = filteredCards.filter(card => {
+          if (recentPicks.length === 0) return true;
+          const lastPick = recentPicks[recentPicks.length - 1];
+          if (filteredCards.length > 1 && card.name === lastPick) return false;
+          return !recentPicks.includes(card.name);
+        });
       }
 
       const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
 
       recentPicks.push(randomCard.name);
-      
-      // Reset the list once all cards in the current filter have been picked
-      if (recentPicks.length >= filteredCards.length) {
-        recentPicks = [];
-      }
 
       const pulledContainer = document.getElementById('pulled-card');
       const cardKey = getCardKey(randomCard.name, randomCard.year);
