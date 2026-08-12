@@ -834,7 +834,7 @@ loadCards().then(cards => {
   };
   
 // #region Pull card functionality
-  // Store up to the last 3 pulled movie names
+  // Store the list of recently picked movie names
   let recentPicks = [];
 
   const pullButton = document.getElementById('pull');
@@ -848,15 +848,19 @@ loadCards().then(cards => {
       // Determine available pool excluding recent picks
       let availableCards = filteredCards.filter(card => !recentPicks.includes(card.name));
 
+      // If all cards in the current filter have been picked, reset the list
       if (availableCards.length === 0) {
+        recentPicks = [];
         availableCards = filteredCards;
       }
 
       const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
 
       recentPicks.push(randomCard.name);
-      if (recentPicks.length > 3) {
-        recentPicks.shift();
+      
+      // Reset the list once all cards in the current filter have been picked
+      if (recentPicks.length >= filteredCards.length) {
+        recentPicks = [];
       }
 
       const pulledContainer = document.getElementById('pulled-card');
