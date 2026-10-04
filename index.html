@@ -760,15 +760,17 @@ loadCards().then(cards => {
   
     const ratingA = statsA.elo;
     const ratingB = statsB.elo;
-  
-    const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-    const expectedB = 1 / (1 + Math.pow(10, (ratingA - ratingB) / 400));
+
+    // Scale factor reduced to 200 (makes point differentials produce much higher win probabilities)
+    const SCALE = 200;
+    const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / SCALE));
+    const expectedB = 1 / (1 + Math.pow(10, (ratingA - ratingB) / SCALE));
   
     const winnerKey = getCardKey(winnerCard.name, winnerCard.year);
     const actualA = winnerKey === keyA ? 1 : 0;
     const actualB = 1 - actualA;
   
-    const K = 32;
+    const K = 80;
   
     // Increment winning pick count
     if (winnerKey === keyA) statsA.picks += 1;
