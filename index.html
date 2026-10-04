@@ -60,6 +60,23 @@
     </div>
 
     <br />
+    <button id="open-bracket-btn" style="display: none; margin: 15px auto;">Rank Picks</button>
+    <div id="bracket-modal" class="modal">
+      <div class="modal-content">
+        <span id="close-bracket" class="close-btn">&times;</span>
+        <div id="bracket-body">
+          <h2 id="bracket-title">Rank your Picks</h2>
+          <p id="bracket-progress">Match 1 of 1</p>
+          <div id="matchup-container">
+            <div id="card-choice-a" class="matchup-card"></div>
+            <div class="vs-divider">VS</div>
+            <div id="card-choice-b" class="matchup-card"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <br />
     <details>
       <summary>All Cards</summary>
       <div id="all-cards-container">
@@ -543,6 +560,11 @@ loadCards().then(cards => {
       nextBtn.style.display = historyStack.length > 1 ? 'inline-block' : 'none';
       nextBtn.disabled = historyIndex >= historyStack.length - 1;
     }
+
+    const bracketBtn = document.getElementById('open-bracket-btn');
+    if (bracketBtn) {
+      bracketBtn.style.display = historyStack.length > 1 ? 'block' : 'none';
+    }
   }
 
   async function renderPulledCard(card) {
@@ -629,6 +651,115 @@ loadCards().then(cards => {
   });
 // #endregion
 
+
+// #region Comparison Bracket Logic
+  let comparisons = [];
+  let comparisonIndex = 0;
+  let winCounts = {};
+
+  function generatePairs(cards) {
+    const pairs = [];
+    for (let i = 0; i < cards.length; i++) {
+      for (let j = i + 1; j < cards.length; j++) {
+        pairs.push([cards[i], cards[j]]);
+      }
+    }
+    // Shuffle comparison pairs
+    return pairs.sort(() => Math.random() - 0.5);
+  }
+
+  function renderMatchupCard(card, elementId) {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+    const cardKey = getCardKey(card.name, card.year);
+    
+    container.innerHTML = `
+      <div class="card ${getClass(card.ageRating)}" style="margin:0; width: 100%;">
+        <img src="${card.image || 'default.webp'}" alt="${card.name}">
+        <h3>${card.name}</h3>
+        <p>${card.year} • ${card.ageRating}</p>
+        <p>${card.genres}</p>
+      </div>
+    `;
+    container.onclick = () => selectWinner(card);
+  }
+
+  function showNextMatchup() {
+    if (comparisonIndex >= comparisons.length) {
+      showRankedResults();
+      return;
+    }
+
+    const [cardA, cardB] = comparisons[comparisonIndex];
+    document.getElementById('bracket-progress').innerText = `Match ${comparisonIndex + 1} of ${comparisons.length}`;
+    renderMatchupCard(cardA, 'card-choice-a');
+    renderMatchupCard(cardB, 'card-choice-b');
+  }
+
+  function selectWinner(winnerCard) {
+    const winnerKey = getCardKey(winnerCard.name, winnerCard.year);
+    winCounts[winnerKey] = (winCounts[winnerKey] || 0) + 1;
+    comparisonIndex++;
+    showNextMatchup();
+  }
+
+  function showRankedResults() {
+    const bracketBody = document.getElementById('bracket-body');
+    
+    // Deduplicate history stack items
+    const uniqueHistory = Array.from(
+      new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
+    );
+
+    const ranked = uniqueHistory.sort((a, b) => {
+      const scoreA = winCounts[getCardKey(a.name, a.year)] || 0;
+      const scoreB = winCounts[getCardKey(b.name, b.year)] || 0;
+      return scoreB - scoreA;
+    });
+
+    let html = `<h2>Final Rankings</h2><ol class="ranked-list">`;
+    ranked.forEach(card => {
+      const score = winCounts[getCardKey(card.name, card.year)] || 0;
+      html += `<li><strong>${card.name}</strong> (${card.year}) — ${score} win${score === 1 ? '' : 's'}</li>`;
+    });
+    html += `</ol><button id="restart-bracket" style="margin-top:15px;">Rank Again</button>`;
+
+    bracketBody.innerHTML = html;
+    document.getElementById('restart-bracket')?.addEventListener('click', startBracket);
+  }
+
+  function startBracket() {
+    // Deduplicate current stack for unique matchups
+    const uniqueCards = Array.from(
+      new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
+    );
+
+    if (uniqueCards.length < 2) return;
+
+    winCounts = {};
+    uniqueCards.forEach(c => winCounts[getCardKey(c.name, c.year)] = 0);
+    comparisons = generatePairs(uniqueCards);
+    comparisonIndex = 0;
+
+    document.getElementById('bracket-body').innerHTML = `
+      <h2 id="bracket-title">Movie Matchup</h2>
+      <p id="bracket-progress"></p>
+      <div id="matchup-container">
+        <div id="card-choice-a" class="matchup-card"></div>
+        <div class="vs-divider">VS</div>
+        <div id="card-choice-b" class="matchup-card"></div>
+      </div>
+    `;
+
+    document.getElementById('bracket-modal').style.display = 'flex';
+    showNextMatchup();
+  }
+
+  document.getElementById('open-bracket-btn')?.addEventListener('click', startBracket);
+  document.getElementById('close-bracket')?.addEventListener('click', () => {
+    document.getElementById('bracket-modal').style.display = 'none';
+  });
+// #endregion Comparison Bracket Logic
 
   // SCROLL BAR SCRUBBER LOGIC
   const cardsDiv = document.getElementById('cards');
