@@ -14,6 +14,11 @@
     <div id="debug-window"><h4>Failed TMDB Fetches</h4></div>
 
     <img src="filter-icon.png" id="filter-icon" alt="Filter">
+    <button id="search-toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; position: absolute; top: 15px; left: 60px;">🔍</button>
+    
+    <div id="search-menu" style="display: none; position: absolute; top: 55px; left: 10px; z-index: 100; background: #222; padding: 12px; border: 1px solid #404040; border-radius: 6px;">
+      <input type="text" id="movie-search-input" placeholder="Search movies..." style="width: 200px; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #111; color: #fff;">
+    </div>
 
     <div id="filter-menu">
         <div class="filter-group">
@@ -98,6 +103,9 @@ const debug = false;
 
 // TMDB API key - get your free key from https://www.themoviedb.org/settings/api
 const TMDB_API_KEY = '21380f8de344d7182c72f7be9d4b887e';
+
+// for comparison rankings
+const BASE_ELO = 1000;
 
 let allCards = [];
 let filteredCards = [];
@@ -501,6 +509,27 @@ loadCards().then(cards => {
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   };
 
+  // Search Toggle & Live Filter Logic
+  const searchBtn = document.getElementById('search-toggle-btn');
+  const searchMenu = document.getElementById('search-menu');
+  const searchInput = document.getElementById('movie-search-input');
+  
+  searchBtn.onclick = () => {
+    const isHidden = searchMenu.style.display === 'none';
+    searchMenu.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) searchInput.focus();
+  };
+  
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim().toLowerCase();
+  
+    filteredCards = allCards.filter(card => 
+      card.name.toLowerCase().includes(query)
+    );
+  
+    displayCards(filteredCards);
+  });
+
 // #region Apply Filter Logic
   document.getElementById('apply-filters').onclick = () => {
     const decade = document.getElementById('filter-decade').value;
@@ -542,6 +571,10 @@ loadCards().then(cards => {
     
     const favCB = document.getElementById('filter-favorites');
     if (favCB) favCB.checked = false;
+  
+    // Clear search input and menu
+    searchInput.value = '';
+    searchMenu.style.display = 'none';
     
     filteredCards = allCards;
     displayCards(allCards);
@@ -681,13 +714,13 @@ loadCards().then(cards => {
     );
   
     const sorted = uniqueHistory.sort((a, b) => {
-      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: 1200, picks: 0 };
-      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: 1200, picks: 0 };
+      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: BASE_ELO, picks: 0 };
+      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: BASE_ELO, picks: 0 };
       return statsB.elo - statsA.elo;
     });
   
     rankingsList.innerHTML = sorted.map(card => {
-      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: 1200, picks: 0 };
+      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: BASE_ELO, picks: 0 };
       const pickLabel = stats.picks === 1 ? '1 pick' : `${stats.picks} picks`;
       return `<li><strong>${card.name}</strong> (${card.year}) — ${stats.elo} pts (${pickLabel})</li>`;
     }).join('');
@@ -701,14 +734,14 @@ loadCards().then(cards => {
     );
   
     const ranked = uniqueHistory.sort((a, b) => {
-      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: 1200, picks: 0 };
-      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: 1200, picks: 0 };
+      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: BASE_ELO, picks: 0 };
+      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: BASE_ELO, picks: 0 };
       return statsB.elo - statsA.elo;
     });
   
     let html = `<h2>Final Elo Rankings</h2><ol class="ranked-list">`;
     ranked.forEach(card => {
-      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: 1200, picks: 0 };
+      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: BASE_ELO, picks: 0 };
       const pickLabel = stats.picks === 1 ? '1 pick' : `${stats.picks} picks`;
       html += `<li><strong>${card.name}</strong> (${card.year}) — ${stats.elo} pts (${pickLabel})</li>`;
     });
@@ -755,8 +788,8 @@ loadCards().then(cards => {
     const keyB = getCardKey(cardB.name, cardB.year);
   
     // Fallback defaults if key missing
-    const statsA = winCounts[keyA] || { elo: 1200, picks: 0 };
-    const statsB = winCounts[keyB] || { elo: 1200, picks: 0 };
+    const statsA = winCounts[keyA] || { elo: BASE_ELO, picks: 0 };
+    const statsB = winCounts[keyB] || { elo: BASE_ELO, picks: 0 };
   
     const ratingA = statsA.elo;
     const ratingB = statsB.elo;
@@ -797,7 +830,7 @@ loadCards().then(cards => {
     // Track Elo and pick counts per card key
     winCounts = {};
     uniqueCards.forEach(c => {
-      winCounts[getCardKey(c.name, c.year)] = { elo: 1200, picks: 0 };
+      winCounts[getCardKey(c.name, c.year)] = { elo: BASE_ELO, picks: 0 };
     });
   
     comparisons = generatePairs(uniqueCards);
