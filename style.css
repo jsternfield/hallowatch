@@ -307,3 +307,16 @@ body {
   top: 0;
 }
 /* #endregion Custom Scroll Scrubber style */
+
+/* History Navigation Buttons */
+#history-prev, #history-next {
+  font-weight: bold;
+  font-size: 1.2em;
+  padding: 10px 15px;
+  height: max-content;
+}
+
+#history-prev:disabled, #history-next:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

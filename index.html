@@ -53,7 +53,12 @@
     <p>Click to pick a random movie from the deck!</p>
     <button id="pull">Pick a Flick</button>
     <br /><br />
-    <div id="pulled-card"></div>
+    <div id="pulled-card-wrapper" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+  <button id="history-prev" style="display: none;">&lt;</button>
+  <div id="pulled-card"></div>
+  <button id="history-next" style="display: none;">&gt;</button>
+</div>
+
     <br />
     <details>
       <summary>All Cards</summary>
@@ -523,82 +528,107 @@ loadCards().then(cards => {
   };
   
 // #region Pull card functionality
-  // Store the list of recently picked movie names
-  let recentPicks = [];
+  let historyStack = [];
+  let historyIndex = -1;
+
+  function updateHistoryNavUI() {
+    const prevBtn = document.getElementById('history-prev');
+    const nextBtn = document.getElementById('history-next');
+
+    if (prevBtn) {
+      prevBtn.style.display = historyStack.length > 1 ? 'inline-block' : 'none';
+      prevBtn.disabled = historyIndex <= 0;
+    }
+    if (nextBtn) {
+      nextBtn.style.display = historyStack.length > 1 ? 'inline-block' : 'none';
+      nextBtn.disabled = historyIndex >= historyStack.length - 1;
+    }
+  }
+
+  async function renderPulledCard(card) {
+    const pulledContainer = document.getElementById('pulled-card');
+    if (!pulledContainer || !card) return;
+
+    const cardKey = getCardKey(card.name, card.year);
+    const isFav = getFavorites().includes(cardKey);
+    const safeName = card.name.replace(/'/g, "\\'");
+    const safeYear = card.year.replace(/'/g, "\\'");
+
+    const initialSrc = (card.image && card.image !== 'default.webp') 
+      ? card.image 
+      : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    pulledContainer.innerHTML = `
+      <div class="card ${getClass(card.ageRating)}" data-key="${cardKey}">
+        <button class="star-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${safeName}', '${safeYear}')">★</button>
+        <img id="pulled-img" src="${initialSrc}" alt="${card.name.replace(/"/g, '&quot;')}" onerror="this.onerror=null; this.src='default.webp';">
+        <h3><a href="${card.id ? `https://www.themoviedb.org/${card.isTV ? 'tv' : 'movie'}/${card.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(card.name)}`}" target="_blank" class="card-link">${card.name}</a></h3>
+        <p>Age Rating: ${card.ageRating}</p>
+        <p>Year: ${card.year}</p>
+        <p>Genres: ${card.genres}</p>
+      </div>
+    `;
+
+    if (!card.image || card.image === 'default.webp') {
+      const imgElement = document.getElementById('pulled-img');
+
+      const fallbackTimer = setTimeout(() => {
+        if (imgElement) imgElement.src = 'default.webp';
+      }, 1000);
+
+      const fetchedUrl = await fetchImage(card);
+      clearTimeout(fallbackTimer);
+
+      if (imgElement) {
+        imgElement.src = fetchedUrl || 'default.webp';
+      }
+    }
+
+    updateHistoryNavUI();
+  }
 
   const pullButton = document.getElementById('pull');
   if (pullButton) {
-    pullButton.addEventListener('click', async () => {
+    pullButton.addEventListener('click', () => {
       if (filteredCards.length === 0) {
         alert("No movies match your current filters!");
         return;
       }
 
-      // Determine available pool excluding recent picks, and ensure we don't pick the immediate last pick (unless list size is 1)
-      let availableCards = filteredCards.filter(card => {
-        if (recentPicks.length === 0) return true;
-        const lastPick = recentPicks[recentPicks.length - 1];
-        if (filteredCards.length > 1 && card.name === lastPick) return false;
-        return !recentPicks.includes(card.name);
-      });
-
-      // If all cards have been picked, reset the list and pick from the full filtered pool
-      if (availableCards.length === 0) {
-        recentPicks = [];
-        availableCards = filteredCards.filter(card => {
-          if (recentPicks.length === 0) return true;
-          const lastPick = recentPicks[recentPicks.length - 1];
-          if (filteredCards.length > 1 && card.name === lastPick) return false;
-          return !recentPicks.includes(card.name);
-        });
+      // Exclude the immediate previous pick to prevent back-to-back duplicates
+      let availableCards = filteredCards;
+      if (filteredCards.length > 1 && historyStack.length > 0) {
+        const lastCard = historyStack[historyStack.length - 1];
+        availableCards = filteredCards.filter(c => getCardKey(c.name, c.year) !== getCardKey(lastCard.name, lastCard.year));
       }
 
       const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
 
-      recentPicks.push(randomCard.name);
-
-      const pulledContainer = document.getElementById('pulled-card');
-      const cardKey = getCardKey(randomCard.name, randomCard.year);
-      const isFav = getFavorites().includes(cardKey);
-      const safeName = randomCard.name.replace(/'/g, "\\'");
-      const safeYear = randomCard.year.replace(/'/g, "\\'");
-
-      // Determine initial image source to avoid immediate default flash
-      const initialSrc = (randomCard.image && randomCard.image !== 'default.webp') 
-        ? randomCard.image 
-        : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-
-      pulledContainer.innerHTML = `
-        <div class="card ${getClass(randomCard.ageRating)}" data-key="${cardKey}">
-          <button class="star-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${safeName}', '${safeYear}')">★</button>
-          <img id="pulled-img" src="${initialSrc}" alt="${randomCard.name.replace(/"/g, '&quot;')}" onerror="this.onerror=null; this.src='default.webp';">
-          <h3><a href="${randomCard.id ? `https://www.themoviedb.org/${randomCard.isTV ? 'tv' : 'movie'}/${randomCard.id}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(randomCard.name)}`}" target="_blank" class="card-link">${randomCard.name}</a></h3>
-          <p>Age Rating: ${randomCard.ageRating}</p>
-          <p>Year: ${randomCard.year}</p>
-          <p>Genres: ${randomCard.genres}</p>
-        </div>
-      `;
-
-      // Only start timer/fetch if we don't already have the real image cached
-      if (!randomCard.image || randomCard.image === 'default.webp') {
-        const imgElement = document.getElementById('pulled-img');
-
-        // Set up 1-second fallback timer
-        const fallbackTimer = setTimeout(() => {
-          if (imgElement) imgElement.src = 'default.webp';
-        }, 1000);
-
-        // Fetch image from TMDB
-        const fetchedUrl = await fetchImage(randomCard);
-        clearTimeout(fallbackTimer);
-
-        if (imgElement) {
-          imgElement.src = fetchedUrl || 'default.webp';
-        }
+      historyStack.push(randomCard);
+      if (historyStack.length > 10) {
+        historyStack.shift();
       }
+      historyIndex = historyStack.length - 1;
+
+      renderPulledCard(randomCard);
     });
   }
+
+  document.getElementById('history-prev')?.addEventListener('click', () => {
+    if (historyIndex > 0) {
+      historyIndex--;
+      renderPulledCard(historyStack[historyIndex]);
+    }
+  });
+
+  document.getElementById('history-next')?.addEventListener('click', () => {
+    if (historyIndex < historyStack.length - 1) {
+      historyIndex++;
+      renderPulledCard(historyStack[historyIndex]);
+    }
+  });
 // #endregion
+
 
   // SCROLL BAR SCRUBBER LOGIC
   const cardsDiv = document.getElementById('cards');
