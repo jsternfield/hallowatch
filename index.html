@@ -675,22 +675,47 @@ loadCards().then(cards => {
   function renderLiveRankings() {
     const rankingsList = document.getElementById('live-rankings-list');
     if (!rankingsList) return;
-
+  
     const uniqueHistory = Array.from(
       new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
     );
-
-    // Sort descending by current Elo score
+  
     const sorted = uniqueHistory.sort((a, b) => {
-      const scoreA = winCounts[getCardKey(a.name, a.year)] || 1200;
-      const scoreB = winCounts[getCardKey(b.name, b.year)] || 1200;
-      return scoreB - scoreA;
+      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: 1200, picks: 0 };
+      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: 1200, picks: 0 };
+      return statsB.elo - statsA.elo;
     });
-
+  
     rankingsList.innerHTML = sorted.map(card => {
-      const score = winCounts[getCardKey(card.name, card.year)] || 1200;
-      return `<li><strong>${card.name}</strong> (${card.year}) — ${score} pts</li>`;
+      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: 1200, picks: 0 };
+      const pickLabel = stats.picks === 1 ? '1 pick' : `${stats.picks} picks`;
+      return `<li><strong>${card.name}</strong> (${card.year}) — ${stats.elo} pts (${pickLabel})</li>`;
     }).join('');
+  }
+  
+  function showRankedResults() {
+    const bracketBody = document.getElementById('bracket-body');
+    
+    const uniqueHistory = Array.from(
+      new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
+    );
+  
+    const ranked = uniqueHistory.sort((a, b) => {
+      const statsA = winCounts[getCardKey(a.name, a.year)] || { elo: 1200, picks: 0 };
+      const statsB = winCounts[getCardKey(b.name, b.year)] || { elo: 1200, picks: 0 };
+      return statsB.elo - statsA.elo;
+    });
+  
+    let html = `<h2>Final Elo Rankings</h2><ol class="ranked-list">`;
+    ranked.forEach(card => {
+      const stats = winCounts[getCardKey(card.name, card.year)] || { elo: 1200, picks: 0 };
+      const pickLabel = stats.picks === 1 ? '1 pick' : `${stats.picks} picks`;
+      html += `<li><strong>${card.name}</strong> (${card.year}) — ${stats.elo} pts (${pickLabel})</li>`;
+    });
+    html += `</ol><button id="restart-bracket" style="margin-top:15px;">Rank Again</button>`;
+  
+    bracketBody.innerHTML = html;
+    document.getElementById('restart-bracket')?.addEventListener('click', startBracket);
   }
 
   function renderMatchupCard(card, elementId) {
@@ -728,67 +753,54 @@ loadCards().then(cards => {
     const [cardA, cardB] = comparisons[comparisonIndex];
     const keyA = getCardKey(cardA.name, cardA.year);
     const keyB = getCardKey(cardB.name, cardB.year);
-
-    const ratingA = winCounts[keyA] || 1200;
-    const ratingB = winCounts[keyB] || 1200;
-
-    // Calculate expected scores
+  
+    // Fallback defaults if key missing
+    const statsA = winCounts[keyA] || { elo: 1200, picks: 0 };
+    const statsB = winCounts[keyB] || { elo: 1200, picks: 0 };
+  
+    const ratingA = statsA.elo;
+    const ratingB = statsB.elo;
+  
     const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
     const expectedB = 1 / (1 + Math.pow(10, (ratingA - ratingB) / 400));
-
-    // Actual scores (1 for win, 0 for loss)
-    const actualA = getCardKey(winnerCard.name, winnerCard.year) === keyA ? 1 : 0;
+  
+    const winnerKey = getCardKey(winnerCard.name, winnerCard.year);
+    const actualA = winnerKey === keyA ? 1 : 0;
     const actualB = 1 - actualA;
-
-    // K-factor determines how fast ratings adjust
+  
     const K = 32;
-
+  
+    // Increment winning pick count
+    if (winnerKey === keyA) statsA.picks += 1;
+    if (winnerKey === keyB) statsB.picks += 1;
+  
     // Update Elo ratings
-    winCounts[keyA] = Math.round(ratingA + K * (actualA - expectedA));
-    winCounts[keyB] = Math.round(ratingB + K * (actualB - expectedB));
-
+    statsA.elo = Math.round(ratingA + K * (actualA - expectedA));
+    statsB.elo = Math.round(ratingB + K * (actualB - expectedB));
+  
+    winCounts[keyA] = statsA;
+    winCounts[keyB] = statsB;
+  
     comparisonIndex++;
     showNextMatchup();
-  }
-
-  function showRankedResults() {
-    const bracketBody = document.getElementById('bracket-body');
-    
-    const uniqueHistory = Array.from(
-      new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
-    );
-
-    // Sort descending by Elo score
-    const ranked = uniqueHistory.sort((a, b) => {
-      const scoreA = winCounts[getCardKey(a.name, a.year)] || 1200;
-      const scoreB = winCounts[getCardKey(b.name, b.year)] || 1200;
-      return scoreB - scoreA;
-    });
-
-    let html = `<h2>Final Elo Rankings</h2><ol class="ranked-list">`;
-    ranked.forEach(card => {
-      const score = winCounts[getCardKey(card.name, card.year)] || 1200;
-      html += `<li><strong>${card.name}</strong> (${card.year}) — ${score} pts</li>`;
-    });
-    html += `</ol><button id="restart-bracket" style="margin-top:15px;">Rank Again</button>`;
-
-    bracketBody.innerHTML = html;
-    document.getElementById('restart-bracket')?.addEventListener('click', startBracket);
   }
 
   function startBracket() {
     const uniqueCards = Array.from(
       new Map(historyStack.map(c => [getCardKey(c.name, c.year), c])).values()
     );
-
+  
     if (uniqueCards.length < 2) return;
-
+  
+    // Track Elo and pick counts per card key
     winCounts = {};
-    uniqueCards.forEach(c => winCounts[getCardKey(c.name, c.year)] = 1200);
-
+    uniqueCards.forEach(c => {
+      winCounts[getCardKey(c.name, c.year)] = { elo: 1200, picks: 0 };
+    });
+  
     comparisons = generatePairs(uniqueCards);
     comparisonIndex = 0;
-
+  
     document.getElementById('bracket-body').innerHTML = `
       <h2 id="bracket-title">Movie Matchup</h2>
       <p id="bracket-progress"></p>
@@ -802,7 +814,7 @@ loadCards().then(cards => {
         <ol id="live-rankings-list" class="ranked-list" style="margin: 10px auto; max-height: 150px; overflow-y: auto;"></ol>
       </div>
     `;
-
+  
     document.getElementById('bracket-modal').style.display = 'flex';
     showNextMatchup();
   }
