@@ -15,6 +15,7 @@
 
     <img src="filter-icon.png" id="filter-icon" alt="Filter">
     <button id="search-toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; position: absolute; top: 15px; left: 60px;">🔍</button>
+    <button id="suggestions-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; position: absolute; top: 15px; left: 105px;" title="Suggestions">🧁</button>
     
     <div id="search-menu" style="display: none; position: absolute; top: 55px; left: 10px; z-index: 100; background: #222; padding: 12px; border: 1px solid #404040; border-radius: 6px;">
       <input type="text" id="movie-search-input" placeholder="Search movies..." style="width: 200px; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #111; color: #fff;">
@@ -688,6 +689,65 @@ loadCards().then(cards => {
   });
 // #endregion
 
+// #region Suggestions Logic
+  function getMovieSuggestions() {
+    const favorites = getFavorites();
+  
+    if (favorites.length === 0) {
+      alert("Add a few movies to your Favorites ⭐ first so we can generate suggestions!");
+      return;
+    }
+  
+    // 1. Collect genre frequencies from all favorited cards
+    const favCards = allCards.filter(card => favorites.includes(getCardKey(card.name, card.year)));
+    const genreCounts = {};
+  
+    favCards.forEach(card => {
+      if (!card.genres) return;
+      card.genres.split(',').forEach(g => {
+        const genre = g.trim();
+        if (genre) {
+          genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+        }
+      });
+    });
+  
+    // 2. Score remaining non-favorited cards by matching genres
+    const candidates = allCards.filter(card => !favorites.includes(getCardKey(card.name, card.year)));
+  
+    const scoredCards = candidates.map(card => {
+      let score = 0;
+      if (card.genres) {
+        card.genres.split(',').forEach(g => {
+          const genre = g.trim();
+          if (genreCounts[genre]) {
+            score += genreCounts[genre];
+          }
+        });
+      }
+      return { card, score };
+    }).filter(item => item.score > 0);
+  
+    if (scoredCards.length === 0) {
+      alert("No matching recommendations found for your current favorites.");
+      return;
+    }
+  
+    // 3. Sort by genre match score descending, breaking ties with newer release year
+    scoredCards.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return parseInt(b.card.year || 0, 10) - parseInt(a.card.year || 0, 10);
+    });
+  
+    // 4. Return top 5 suggestions
+    filteredCards = scoredCards.slice(0, 5).map(item => item.card);
+    displayCards(filteredCards);
+  }
+  
+  document.getElementById('suggestions-btn')?.addEventListener('click', getMovieSuggestions);
+// #endregion Suggestions Logic
 
 // #region Comparison Bracket Logic
   let comparisons = [];
