@@ -146,42 +146,6 @@ body {
   width: 100%;
 }
 
-/* Responsive Grid for Mobile and Tablets */
-@media (max-width: 1000px) {
-  #cards {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between; /* Distributes cards evenly */
-    padding: 10px;
-  }
-
-  .card {
-    /* Calculates width for 2 columns minus margins */
-    width: calc(50% - 20px); 
-    max-width: none; 
-    margin: 10px 5px;
-    padding: 8px;
-    font-size: 0.9em;
-  }
-  
-  #pulled-card .card {
-    /* Keeps the 'Pick a Flick' result large and centered */
-    width: 60%;
-    max-width: 300px;
-    margin: 0 auto;
-  }
-}
-
-/* Extra small devices adjustment */
-@media (max-width: 400px) {
-  .card h3 {
-    font-size: 1em;
-  }
-  .card p {
-    font-size: 0.8em;
-  }
-}
-
 .card:hover {
   transform: translateY(-5px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.7);
@@ -308,15 +272,74 @@ body {
 }
 /* #endregion Custom Scroll Scrubber style */
 
-/* History Navigation Buttons */
+/* History Navigation Wrapper & Buttons */
+#pulled-card-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  width: 100%;
+}
+
+#pulled-card {
+  display: flex;
+  justify-content: center;
+  width: auto; /* Overrides full width stretching so buttons sit naturally alongside */
+}
+
 #history-prev, #history-next {
   font-weight: bold;
   font-size: 1.2em;
   padding: 10px 15px;
-  height: max-content;
+  flex-shrink: 0; /* Prevents buttons from squishing the card */
 }
 
 #history-prev:disabled, #history-next:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+/* Responsive Grid for Mobile and Tablets */
+@media (max-width: 1000px) {
+  #cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between; /* Distributes cards evenly */
+    padding: 10px;
+  }
+
+  .card {
+    /* Calculates width for 2 columns minus margins */
+    width: calc(50% - 20px); 
+    max-width: none; 
+    margin: 10px 5px;
+    padding: 8px;
+    font-size: 0.9em;
+  }
+  
+  #pulled-card .card {
+    /* Ensures the card takes maximum space between the history buttons on mobile */
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  #pulled-card-wrapper {
+    gap: 5px; /* Tighten button padding on narrow screens */
+  }
+
+  #history-prev, #history-next {
+    padding: 8px 10px;
+    font-size: 1em;
+  }
+}
+
+/* Extra small devices adjustment */
+@media (max-width: 400px) {
+  .card h3 {
+    font-size: 1em;
+  }
+  .card p {
+    font-size: 0.8em;
+  }
 }
