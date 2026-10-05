@@ -337,29 +337,36 @@ body {
   color: #fff;
 }
 
+/* Matchup Container Layout */
 #matchup-container {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
-  justify-content: space-around;
-  gap: 10px;
-  margin-top: 15px;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/* Individual Card Option Wrapper */
 .matchup-card {
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0; /* Prevents text overflow from expanding card width on mobile */
   cursor: pointer;
-  transition: transform 0.2s, filter 0.2s;
+  transition: transform 0.2s ease;
 }
 
 .matchup-card:hover {
-  transform: scale(1.03);
-  filter: brightness(1.15);
+  transform: scale(1.02);
 }
 
+/* VS Divider Styling */
 .vs-divider {
   font-weight: bold;
-  font-size: 1.4em;
+  font-size: 0.9rem;
   color: #ff9800;
+  flex-shrink: 0;
+  padding: 0 4px;
 }
 
 .ranked-list {
@@ -386,6 +393,13 @@ body {
     padding: 8px;
     font-size: 0.9em;
   }
+
+  .card h3 {
+    font-size: 1em;
+  }
+  .card p {
+    font-size: 0.8em;
+  }
   
   #pulled-card .card {
     /* Ensures the card takes maximum space between the history buttons on mobile */
@@ -403,20 +417,31 @@ body {
     font-size: 1em;
   }
 
-  #matchup-container {
-    flex-direction: column;
+  #bracket-modal .modal-content {
+    width: 95% !important;
+    padding: 12px 8px !important;
   }
-  .vs-divider {
-    margin: 10px 0;
-  }
-}
 
-/* Extra small devices adjustment */
-@media (max-width: 400px) {
-  .card h3 {
-    font-size: 1em;
+  .matchup-card .card {
+    padding: 8px !important;
+    font-size: 0.8rem;
   }
-  .card p {
-    font-size: 0.8em;
+
+  .matchup-card .card h3 {
+    font-size: 0.85rem !important;
+    margin: 4px 0 !important;
+    /* Truncate long title text so it won't distort the card dimensions */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .matchup-card .card img {
+    max-height: 140px;
+    object-fit: cover;
+  }
+
+  .vs-divider {
+    font-size: 0.75rem;
   }
 }
