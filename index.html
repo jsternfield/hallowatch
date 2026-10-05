@@ -63,10 +63,10 @@
           <input type="checkbox" id="filter-suggestions" style="margin-right: 8px;"> 
           Suggestions 🧁
         </label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
+        <!--<label style="display: flex; align-items: center; cursor: pointer;">
           <input type="checkbox" id="filter-failed-images" style="margin-right: 8px;"> 
           Debug: Failed Images
-        </label>
+        </label>-->
         <button id="apply-filters">Apply</button>
         <button id="clear-filters" style="width: 100%; background-color: transparent; border: 1px solid #666; margin-top: 8px; font-size: 0.8em;">Clear Filters</button>
     </div>
@@ -106,7 +106,7 @@
     <button id="load-more-suggestions-btn" style="display: none; margin: 10px auto; padding: 8px 16px; background-color: #ff6600; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Show more suggestions...</button>
     <br />
     <details>
-      <summary>All Cards</summary>
+      <summary id="cards-summary">All Cards</summary>
       <div id="all-cards-container">
       <div id="cards"></div>
       <div id="custom-scrubber-track">
@@ -591,6 +591,18 @@ loadCards().then(cards => {
   
       return decadeMatch && genreMatch && imageMatch && specialMatch;
     });
+
+    // Toggle summary text based on filter state
+    const summaryElem = document.getElementById('cards-summary');
+    if (summaryElem) {
+      const isFiltered = (decade !== 'all') || 
+                         (selectedGenres.length > 0) || 
+                         showOnlyFailed || 
+                         showFavorites || 
+                         showSuggestions;
+      
+      summaryElem.innerText = isFiltered ? 'All Cards (filtered)' : 'All Cards';
+    }
   
     displayCards(filteredCards);
     document.getElementById('filter-menu').style.display = 'none';
@@ -641,6 +653,10 @@ loadCards().then(cards => {
   
     // Clear search input and menu
     //searchInput.value = '';
+
+    // Reset summary text
+    const summaryElem = document.getElementById('cards-summary');
+    if (summaryElem) summaryElem.innerText = 'All Cards';
 
     filteredCards = allCards;
     displayCards(allCards);
