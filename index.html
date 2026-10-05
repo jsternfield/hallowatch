@@ -13,12 +13,24 @@
     <div id="app">
     <div id="debug-window"><h4>Failed TMDB Fetches</h4></div>
 
-    <img src="filter-icon.png" id="filter-icon" alt="Filter">
-    <button id="search-toggle-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; position: absolute; top: 15px; left: 60px;">🔍</button>
-    <button id="suggestions-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; position: absolute; top: 15px; left: 105px;" title="Suggestions">🧁</button>
-    
-    <div id="search-menu" style="display: none; position: absolute; top: 55px; left: 10px; z-index: 100; background: #222; padding: 12px; border: 1px solid #404040; border-radius: 6px;">
-      <input type="text" id="movie-search-input" placeholder="Search movies..." style="width: 200px; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #111; color: #fff;">
+    <!-- Pinned Top Action Bar -->
+    <header id="top-bar">
+      <div id="top-bar-left">
+        <button id="suggestions-btn" title="Suggestions">🧁</button>
+      </div>
+
+      <div id="top-bar-center">
+        <span id="search-icon">🔍</span>
+        <input type="text" id="movie-search-input" placeholder="Search movies...">
+      </div>
+
+      <div id="top-bar-right">
+        <img src="filter-icon.png" id="filter-icon" alt="Filter" title="Filters">
+      </div>
+    </header>
+
+    <div id="search-menu" style="display: none;">
+      <input type="text" id="movie-search-input" placeholder="Search movies...">
     </div>
 
     <div id="filter-menu">
@@ -516,16 +528,8 @@ loadCards().then(cards => {
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   };
 
-  // Search Toggle & Live Filter Logic
-  const searchBtn = document.getElementById('search-toggle-btn');
-  const searchMenu = document.getElementById('search-menu');
+  // Live Search Filter Logic
   const searchInput = document.getElementById('movie-search-input');
-  
-  searchBtn.onclick = () => {
-    const isHidden = searchMenu.style.display === 'none';
-    searchMenu.style.display = isHidden ? 'block' : 'none';
-    if (isHidden) searchInput.focus();
-  };
   
   searchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim().toLowerCase();
@@ -597,8 +601,7 @@ loadCards().then(cards => {
     if (suggCB) suggCB.checked = false;
   
     // Clear search input and menu
-    searchInput.value = '';
-    searchMenu.style.display = 'none';
+    //searchInput.value = '';
     
     filteredCards = allCards;
     displayCards(allCards);
