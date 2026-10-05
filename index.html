@@ -101,9 +101,9 @@
         </div>
       </div>
     </div>
-
     <br />
     <div id="suggestions-genres-banner" style="display: none; margin: 10px auto; font-size: 0.9em; color: #ffca28;"></div>
+    <button id="load-more-suggestions-btn" style="display: none; margin: 10px auto; padding: 8px 16px; background-color: #ff6600; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Show more suggestions...</button>
     <br />
     <details>
       <summary>All Cards</summary>
@@ -128,6 +128,14 @@ const BASE_ELO = 1000;
 
 let allCards = [];
 let filteredCards = [];
+
+let suggestionOffset = 10; // Initial limit set to 10
+let allSuggestedCandidates = [];
+
+// Call this when suggestions filter/checkbox is activated or favorites change
+function resetSuggestionOffset() {
+  suggestionOffset = 10;
+}
 
 // #region Favorites Management
 function getFavorites() {
@@ -549,9 +557,14 @@ loadCards().then(cards => {
     const showOnlyFailed = document.getElementById('filter-failed-images')?.checked || false;
     const showFavorites = document.getElementById('filter-favorites')?.checked || false;
     const showSuggestions = document.getElementById('filter-suggestions')?.checked || false;
+    
+    const banner = document.getElementById('suggestions-genres-banner');
+    const loadMoreBtn = document.getElementById('load-more-suggestions-btn');
+
     if (!showSuggestions) {
-      const banner = document.getElementById('suggestions-genres-banner');
       if (banner) banner.style.display = 'none';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      suggestionOffset = 10; // Reset offset when suggestions filter is turned off
     }
     
     const favorites = getFavorites();
@@ -569,8 +582,6 @@ loadCards().then(cards => {
   
       const imageMatch = !showOnlyFailed || card.fetchFailed === true;
   
-      // Handle Favorites & Suggestions independently:
-      // If either toggle is checked, match items that satisfy ANY active special list.
       let specialMatch = true;
       if (showFavorites || showSuggestions) {
         const isFavMatch = showFavorites && favorites.includes(cardKey);
@@ -584,7 +595,27 @@ loadCards().then(cards => {
     displayCards(filteredCards);
     document.getElementById('filter-menu').style.display = 'none';
   };
-// #endregion
+
+  // Button handler to load 10 more suggestions at a time
+  document.getElementById('load-more-suggestions-btn')?.addEventListener('click', () => {
+    suggestionOffset += 10;
+    document.getElementById('apply-filters').click();
+  });
+
+  document.getElementById('suggestions-btn')?.addEventListener('click', () => {
+    const favorites = getFavorites();
+    if (favorites.length === 0) {
+      alert("Add a few movies to your Favorites ⭐ first so we can generate suggestions!");
+      return;
+    }
+  
+    const suggCB = document.getElementById('filter-suggestions');
+    if (suggCB) suggCB.checked = true;
+  
+    suggestionOffset = 10; // Reset offset on fresh suggestions click
+    document.getElementById('apply-filters').click();
+  });
+// #endregion  Apply Filter Logic
 
   // Clear Filter Logic
   document.getElementById('clear-filters').onclick = () => {
@@ -599,10 +630,18 @@ loadCards().then(cards => {
 
     const suggCB = document.getElementById('filter-suggestions');
     if (suggCB) suggCB.checked = false;
+
+    const banner = document.getElementById('suggestions-genres-banner');
+    if (banner) banner.style.display = 'none';
+
+    const loadMoreBtn = document.getElementById('load-more-suggestions-btn');
+    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    
+    suggestionOffset = 10;
   
     // Clear search input and menu
     //searchInput.value = '';
-    
+
     filteredCards = allCards;
     displayCards(allCards);
     document.getElementById('filter-menu').style.display = 'none';
@@ -715,125 +754,81 @@ loadCards().then(cards => {
   });
 // #endregion
 
+// Fisher-Yates shuffle helper to randomize ties/candidates so suggestions stay fresh
+  function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
 // #region Suggestions Logic
   function getSuggestedCards() {
-  const favorites = getFavorites();
-  const banner = document.getElementById('suggestions-genres-banner');
-  if (banner) banner.style.display = 'none';
-
-  if (favorites.length === 0) {
-    if (banner) banner.style.display = 'none';
-    return [];
-  }
-
-  const favCards = allCards.filter(card => favorites.includes(getCardKey(card.name, card.year)));
-  const genreCounts = {};
-
-  favCards.forEach(card => {
-    if (!card.genres) return;
-    card.genres.split(',').forEach(g => {
-      const genre = g.trim();
-      if (genre) genreCounts[genre] = (genreCounts[genre] || 0) + 1;
-    });
-  });
-
-  const topGenres = Object.keys(genreCounts).sort((a, b) => genreCounts[b] - genreCounts[a]);
-
-  // Display top matched genres in the banner
-  if (banner && topGenres.length > 0) {
-    banner.innerText = `Suggestions based on favorite genres: ${topGenres.join(', ')}`;
-    banner.style.display = 'block';
-  }
-
-  const candidates = allCards.filter(card => !favorites.includes(getCardKey(card.name, card.year)));
-
-  const scoredCards = candidates.map(card => {
-    let score = 0;
-    if (card.genres) {
-      card.genres.split(',').forEach(g => {
-        const genre = g.trim();
-        if (genreCounts[genre]) score += genreCounts[genre];
-      });
-    }
-    return { card, score };
-  }).filter(item => item.score > 0);
-
-  scoredCards.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return parseInt(b.card.year || 0, 10) - parseInt(a.card.year || 0, 10);
-  });
-
-  return scoredCards.slice(0, 5).map(item => item.card);
-}
-  
-  function getMovieSuggestions() {
     const favorites = getFavorites();
-  
+    const banner = document.getElementById('suggestions-genres-banner');
+    const loadMoreBtn = document.getElementById('load-more-suggestions-btn');
+
     if (favorites.length === 0) {
-      alert("Add a few movies to your Favorites ⭐ first so we can generate suggestions!");
-      return;
+      if (banner) banner.style.display = 'none';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      allSuggestedCandidates = [];
+      return [];
     }
-  
-    // 1. Collect genre frequencies from all favorited cards
+
     const favCards = allCards.filter(card => favorites.includes(getCardKey(card.name, card.year)));
     const genreCounts = {};
-  
+
     favCards.forEach(card => {
       if (!card.genres) return;
       card.genres.split(',').forEach(g => {
         const genre = g.trim();
-        if (genre) {
-          genreCounts[genre] = (genreCounts[genre] || 0) + 1;
-        }
+        if (genre) genreCounts[genre] = (genreCounts[genre] || 0) + 1;
       });
     });
-  
-    // 2. Score remaining non-favorited cards by matching genres
+
+    const topGenres = Object.keys(genreCounts).sort((a, b) => genreCounts[b] - genreCounts[a]);
+
+    if (banner && topGenres.length > 0) {
+      banner.innerText = `Suggestions based on favorite genres: ${topGenres.join(', ')}`;
+      banner.style.display = 'block';
+    }
+
     const candidates = allCards.filter(card => !favorites.includes(getCardKey(card.name, card.year)));
-  
+
     const scoredCards = candidates.map(card => {
       let score = 0;
       if (card.genres) {
         card.genres.split(',').forEach(g => {
           const genre = g.trim();
-          if (genreCounts[genre]) {
-            score += genreCounts[genre];
-          }
+          if (genreCounts[genre]) score += genreCounts[genre];
         });
       }
       return { card, score };
     }).filter(item => item.score > 0);
-  
-    if (scoredCards.length === 0) {
-      alert("No matching recommendations found for your current favorites.");
-      return;
-    }
-  
-    // 3. Sort by genre match score descending, breaking ties with newer release year
-    scoredCards.sort((a, b) => {
-      if (b.score !== a.score) {
-        return b.score - a.score;
-      }
-      return parseInt(b.card.year || 0, 10) - parseInt(a.card.year || 0, 10);
+
+    // Group candidates by score, shuffle within each score tier, then flatten back into a list
+    const groupedByScore = {};
+    scoredCards.forEach(item => {
+      if (!groupedByScore[item.score]) groupedByScore[item.score] = [];
+      groupedByScore[item.score].push(item.card);
     });
-  
-    // 4. Return top 5 suggestions
-    filteredCards = scoredCards.slice(0, 5).map(item => item.card);
-    displayCards(filteredCards);
-  }
-  
-  document.getElementById('suggestions-btn')?.addEventListener('click', () => {
-    const favorites = getFavorites();
-    if (favorites.length === 0) {
-      alert("Add a few movies to your Favorites ⭐ first so we can generate suggestions!");
-      return;
+
+    const sortedScores = Object.keys(groupedByScore).map(Number).sort((a, b) => b - a);
+    
+    allSuggestedCandidates = [];
+    sortedScores.forEach(score => {
+      const randomizedTier = shuffleArray(groupedByScore[score]);
+      allSuggestedCandidates.push(...randomizedTier);
+    });
+
+    // Toggle "Show more suggestions..." button visibility based on remaining candidate pool
+    if (loadMoreBtn) {
+      loadMoreBtn.style.display = (allSuggestedCandidates.length > suggestionOffset) ? 'block' : 'none';
     }
-  
-    const suggCB = document.getElementById('filter-suggestions');
-    if (suggCB) suggCB.checked = true;
-  
-    document.getElementById('apply-filters').click();
-  });
+
+    return allSuggestedCandidates.slice(0, suggestionOffset);
+  }
 // #endregion Suggestions Logic
 
 // #region Comparison Bracket Logic
