@@ -439,6 +439,7 @@ body {
   .matchup-card .card img {
     max-height: 140px;
     object-fit: cover;
+    object-position: top center;
   }
 
   .vs-divider {
